@@ -14,7 +14,7 @@ TRACEPOINT_EVENT(
     call,
     TP_ARGS(char *, name),
     TP_FIELDS(
-        ctf_string(char *, name)
+        ctf_string(co_name, name)
     )
 )
 
