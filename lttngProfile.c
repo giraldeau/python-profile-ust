@@ -206,7 +206,7 @@ do_callback(PyObject* self, PyObject* args)
     Py_DECREF(tuple);
     if (ret == NULL)
         return NULL;
-    Py_DECREF(tuple);
+    Py_DECREF(ret);
     Py_RETURN_NONE;
 }
 
