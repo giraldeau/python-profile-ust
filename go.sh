@@ -1,14 +1,14 @@
 #!/bin/sh
 
 rm -rf build
-python3 setup.py build
+#python3 setup.py build
 
 lttng destroy -a
 lttng create
-#lttng enable-event -u python:call
-lttng enable-event -a -u
+lttng enable-event -u python:call,python:c_call,python:return,python:c_return
+#lttng enable-event -a -u
 lttng start
-python3 go.py
+python3 -m profileUST foo.py
 lttng stop
 lttng view
 lttng destroy -a

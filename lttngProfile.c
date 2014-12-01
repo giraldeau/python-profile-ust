@@ -8,39 +8,83 @@
 #include <locale.h>
 
 #define TRACEPOINT_DEFINE
+#define TRACEPOINT_CREATE_PROBES
 #include "provider.h"
 
 /*
-def trace_dispatch(frame, event, arg):
-    print("trace_dispatch")
-    fco = frame.f_code
-    pprint.pprint(fco.co_filename)
-    pprint.pprint(fco.co_firstlineno)
-    pprint.pprint(fco.co_name)
-    pprint.pprint(event)
-    pprint.pprint(arg)
+ * FIXME: This is silly... Is there a way to get the object type?
  */
+void show_type(char *name, PyObject *obj)
+{
+    char *type;
+    if (PyByteArray_Check(obj)) {
+        type = "bytearray";
+    } else if (PyBytes_Check(obj)) {
+        type = "bytes";
+    } else if (PyUnicode_Check(obj)) {
+        type = "unicode";
+    } else if (PyUnicode_Check(obj)) {
+        type = "long";
+    } else if (PyBool_Check(obj)) {
+        type = "bool";
+    } else if (PyFloat_Check(obj)) {
+        type = "float";
+    } else if (PyComplex_Check(obj)) {
+        type = "complex";
+    } else if (PyRange_Check(obj)) {
+        type = "range";
+    } else if (PyMemoryView_Check(obj)) {
+        type = "memory";
+    } else if (PyTuple_Check(obj)) {
+        type = "tuple";
+    } else if (PyList_Check(obj)) {
+        type = "list";
+    } else if (PyDict_Check(obj)) {
+        type = "dict";
+    } else if (PySet_Check(obj)) {
+        type = "set";
+    } else if (PyFunction_Check(obj)) {
+        type = "function";
+    } else if (PyCFunction_Check(obj)) {
+        type = "cfunction";
+    } else if (PyModule_Check(obj)) {
+        type = "module";
+    } else if (PyMethod_Check(obj)) {
+        type = "method";
+    } else if (PyInstanceMethod_Check(obj)) {
+        type = "instancemethod";
+    } else if (PyCapsule_CheckExact(obj)) {
+        type = "capsule";
+    } else if (PyTraceBack_Check(obj)) {
+        type = "traceback";
+    } else if (PySlice_Check(obj)) {
+        type = "slice";
+    } else if (PyCell_Check(obj)) {
+        type = "cell";
+    } else if (PySeqIter_Check(obj)) {
+        type = "iter";
+    } else if (PyGen_Check(obj)) {
+        type = "gen";
+    } else if (PyWeakref_Check(obj)) {
+        type = "weakref";
+    } else if (PyFrame_Check(obj)) {
+        type = "frame";
+    } else if (Py_None == obj) {
+        type = "none";
+    } else {
+        type = "unkown";
+    }
+    printf("typeof(%s)=%s\n", name, type);
+}
 
 static PyObject*
-python_profile_ust_callback(PyObject* self, PyObject* args)
+python_ust(PyObject* self, PyObject* args)
 {
     PyObject *frame, *event, *arg;
     PyFrameObject *frameobj;
-    char *co_name;
-
-    /*
-    <class 'frame'>
-    <class 'str'>
-    <class 'builtin_function_or_method'>
-
-+    const char *filename;
-+    const char *fname;
-+    int lineno;
-+
-+    filename = PyString_AsString(f->f_code->co_filename);
-+    fname = PyString_AsString(f->f_code->co_name);
-+    lineno = PyCode_Addr2Line(f->f_code, f->f_lasti);
-     */
+    PyCFunctionObject *cfunc;
+    char *frame_name, *ev_name;
+    const char *cfunc_name = "none";
 
     if (!PyArg_UnpackTuple(args, "ust", 3, 3, &frame, &event, &arg))
         return NULL;
@@ -48,18 +92,155 @@ python_profile_ust_callback(PyObject* self, PyObject* args)
     if (!PyFrame_Check(frame))
         return NULL;
 
-    setlocale(LC_ALL, "");
-    frameobj = (PyFrameObject *) frame;
-    co_name = (char *) PyUnicode_DATA(frameobj->f_code->co_name);
-    printf("co_name=%s (%ld)\n", co_name, strlen(co_name));
+    /*
+    show_type("frame", frame);
+    show_type("event", event);
+    show_type("arg", arg);
+    */
 
-    tracepoint(python, call, co_name);
+    frameobj = (PyFrameObject *)frame;
+
+    frame_name = PyBytes_AsString(PyUnicode_AsUTF8String(frameobj->f_code->co_name));
+    ev_name = PyBytes_AsString(PyUnicode_AsUTF8String(event));
+
+    if (PyCFunction_Check(arg)) {
+        cfunc = (PyCFunctionObject *) arg;
+        cfunc_name = cfunc->m_ml->ml_name;
+    }
+
+    printf("frame=%s event=%s cfunc=%s\n",
+            frame_name, ev_name, cfunc_name);
+
+    if (!PyFrame_Check(frame))
+        return NULL;
+
+    Py_RETURN_NONE;
+}
+
+/*
+#define PyTrace_CALL 0
+#define PyTrace_EXCEPTION 1
+#define PyTrace_LINE 2
+#define PyTrace_RETURN 3
+#define PyTrace_C_CALL 4
+#define PyTrace_C_EXCEPTION 5
+#define PyTrace_C_RETURN 6
+*/
+
+static const char *what_names[] = {
+    "call", "exception", "line", "return",
+    "c_call", "c_exception", "c_return"
+};
+
+int
+trace_func(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg)
+{
+    PyObject *str;
+    const char *name;
+    printf("what=%s\n", what_names[what]);
+    switch(what) {
+    case 0:
+        str = PyUnicode_AsUTF8String(frame->f_code->co_name);
+        name = PyBytes_AsString(str);
+        tracepoint(python, call, name);
+        break;
+    case 1:
+        // TODO: handle exception event
+    case 2:
+        break;
+    case 3:
+        tracepoint(python, return);
+        break;
+    case 4:
+        show_type("arg", arg);
+        if (PyCFunction_Check(arg)) {
+            name = ((PyCFunctionObject *)arg)->m_ml->ml_name;
+            tracepoint(python, c_call, name);
+        }
+        break;
+    case 5:
+        // TODO: handle c_exception event
+        break;
+    case 6:
+        tracepoint(python, c_return);
+        break;
+    default:
+        break;
+    }
+    return 0;
+}
+
+
+/*
+ * Following code based on
+ * https://docs.python.org/2.5/ext/callingPython.html
+ */
+static PyObject *test_callback = NULL;
+
+static PyObject*
+set_callback(PyObject *self, PyObject *args)
+{
+    PyObject *fn;
+
+    if (PyArg_UnpackTuple(args, "test", 1, 1, &fn)) {
+        if (!PyCallable_Check(fn)) {
+            PyErr_SetString(PyExc_TypeError, "parameter must be callable");
+        }
+        Py_XINCREF(fn);
+        Py_XDECREF(test_callback);
+        test_callback = fn;
+        printf("test_callback=%p\n", fn);
+        Py_RETURN_NONE;
+    }
+    return NULL;
+}
+
+static PyObject*
+do_callback(PyObject* self, PyObject* args)
+{
+    PyObject *tuple;
+    PyObject *ret;
+
+    tuple = PyTuple_New(0);
+    ret = PyEval_CallObject(test_callback, tuple);
+    Py_DECREF(tuple);
+    if (ret == NULL)
+        return NULL;
+    Py_DECREF(tuple);
+    Py_RETURN_NONE;
+}
+
+static PyObject*
+do_raise(PyObject* self, PyObject* args)
+{
+    (void) self, (void) args;
+    return NULL;
+}
+
+static PyObject*
+enable_ust(PyObject* self, PyObject* args)
+{
+    (void) self, (void) args;
+    PyEval_SetProfile(trace_func, NULL);
+    Py_RETURN_NONE;
+}
+
+static PyObject*
+disable_ust(PyObject* self, PyObject* args)
+{
+    (void) self, (void) args;
+    PyEval_SetProfile(NULL, NULL);
     Py_RETURN_NONE;
 }
 
 static PyMethodDef PythonProfileLttngMethods[] =
 {
-    {"callback", python_profile_ust_callback, METH_VARARGS, NULL},
+    {"ust",             python_ust,     METH_VARARGS, NULL},
+    {"enable",          enable_ust,     METH_NOARGS,  NULL},
+    {"disable",         disable_ust,    METH_NOARGS,  NULL},
+    {"set_callback",    set_callback,   METH_VARARGS, NULL},
+    {"do_callback",     do_callback,    METH_VARARGS, NULL},
+    {"do_raise",        do_raise,       METH_VARARGS, NULL},
     {NULL, NULL, 0, NULL}
 };
 
