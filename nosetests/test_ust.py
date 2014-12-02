@@ -2,6 +2,7 @@ import subprocess
 import glob
 import os
 import sys
+import tempfile
 from nose import with_setup
 
 def setup_import():
@@ -13,26 +14,32 @@ def setup_import():
         p = os.path.join(os.curdir, d)
         sys.path.append(p)
 
-def run_interpreter(mod):
+def run_interpreter(mod, exp, env):
+    mod = os.path.join("nosetests", mod)
+    cmd = ["python3", "-O", "-m", "profileUST", mod]
+    with tempfile.TemporaryFile(mode="w+") as out:
+        ret = subprocess.call(cmd, env=env, stdout=out, stderr=out)
+        if (ret != exp['status']):
+            print('Error in test ' + repr(mod))
+            out.seek(0)
+            print(out.read())
+    assert ret == exp['status']
+
+mod_desc = { "call_function_foo.py": { 'status': 0 },
+             "call_function_rec.py": { 'status': 0 },
+             "call_function_c.py": { 'status': 0 },
+             "call_method.py": { 'status': 0 },
+             "call_lambda.py": { 'status': 0 },
+             "call_exception.py": { 'status': 1 },
+             "call_exception_c.py": { 'status': 1 },
+            }
+
+@with_setup(setup_import)
+def test_cases():
     sonames = glob.glob("build/*/*.so")
     if len(sonames) != 1:
         raise RuntimeError("rebuild and retry")
     so = os.path.dirname(sonames[0])
-    env = os.environ
-    env['PYTHONPATH'] = so
-    ret = subprocess.call(["python3", "-O", "-m", "profileUST", mod], env=env)
-    print("%s: %d" % (mod, ret))
-
-mod_list = [ "call_function_foo.py",
-             "call_function_rec.py",
-             "call_function_c.py",
-             "call_method.py",
-             "call_lambda.py",
-             "call_exception.py",
-             "call_exception_c.py",
-            ]
-
-@with_setup(setup_import)
-def test_cases():
-    for mod in mod_list:
-        yield run_interpreter, os.path.join("nosetests", mod)
+    env = { 'PYTHONPATH': so, 'HOME': os.environ['HOME']}
+    for mod, exp in mod_desc.items():
+        yield run_interpreter, mod, exp, env

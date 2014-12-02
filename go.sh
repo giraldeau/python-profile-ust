@@ -1,7 +1,7 @@
 #!/bin/sh
 
 rm -rf build
-#python3 setup.py build
+python3 setup.py build
 
 lttng destroy -a
 lttng create
