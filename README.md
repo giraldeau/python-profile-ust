@@ -21,10 +21,10 @@ sudo python3 setup.py install
 ## Usage ##
 
 ```python
-import lttngProfile
-lttngProfile.enable()
+from linuxProfile import api
+api.enable_ust()
 # do something
-lttngProfile.disable()
+api.disable_ust()
 ```
 
 Events will be recorded to any active LTTng-UST session. (see go.sh for an
@@ -59,7 +59,7 @@ if __name__=='__main__':
 lttng create
 lttng enable-event -u python:call,python:c_call,python:return,python:c_return
 lttng start
-python3 -m profileUST foo.py
+python3 -m linuxProfile.ust foo.py
 lttng stop
 lttng view
 ```
