@@ -28,9 +28,7 @@ api.disable_ust()
 ```
 
 Events will be recorded to any active LTTng-UST session. (see go.sh for an
-example of trace management script). Due to a bug in LTTng-UST, baddr events
-must not be enabled. If they are, a deadlock occurs. (Bug:
-https://bugs.lttng.org/issues/865)
+example of trace management script).
 
 Exceptions are not supported yet. I was not able to trigger PyTrace_EXCEPTION
 event using "raise" or similar (see nosetests/call_exception.py)
