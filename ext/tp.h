@@ -2,7 +2,7 @@
 #define TRACEPOINT_PROVIDER python
 
 #undef TRACEPOINT_INCLUDE_FILE
-#define TRACEPOINT_INCLUDE_FILE ./provider.h
+#define TRACEPOINT_INCLUDE_FILE ./tp.h
 
 #if !defined(_PYTHON_TP_PROVIDER_H) || defined(TRACEPOINT_HEADER_MULTI_READ)
 #define _PYTHON_TP_PROVIDER_H
@@ -31,6 +31,11 @@ TRACEPOINT_EVENT_INSTANCE(python, ret_template, return,
 
 TRACEPOINT_EVENT_INSTANCE(python, ret_template, c_return,
     TP_ARGS())
+
+TRACEPOINT_EVENT(python, callstack,
+		TP_ARGS(),
+		TP_FIELDS()
+)
 
 #endif /* _PYTHON_TP_PROVIDER_H */
 #include <lttng/tracepoint-event.h>

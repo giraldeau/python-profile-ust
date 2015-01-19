@@ -24,12 +24,6 @@ class ProfileRunnerUst(ProfileRunner):
     def disable(self):
         api.disable_ust()
 
-class ProfileRunnerCallStack(ProfileRunner):
-    def enable(self):
-        api.enable_callstack()
-    def disable(self):
-        api.disable_callstack()
-
 def run(prof):
     import os
     import sys

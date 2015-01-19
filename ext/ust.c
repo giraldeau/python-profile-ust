@@ -8,10 +8,7 @@
 #include <frameobject.h>
 #include <unicodeobject.h>
 
-#define TRACEPOINT_DEFINE
-#define TRACEPOINT_CREATE_PROBES
-#include "provider.h"
-
+#include "tp.h"
 #include "ust.h"
 
 PyObject*

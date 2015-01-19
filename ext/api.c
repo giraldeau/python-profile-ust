@@ -7,18 +7,19 @@
 #include <string.h>
 
 #include "ust.h"
-#include "callstack.h"
+#include "pmu.h"
 #include "except.h"
 
 static PyMethodDef PythonProfileLttngMethods[] =
 {
-    {"enable_callstack",    enable_callstack,   METH_NOARGS,  NULL},
-    {"disable_callstack",   disable_callstack,  METH_NOARGS,  NULL},
+    {"enable_perf",         enable_perf,        METH_NOARGS,  NULL},
+    {"disable_perf",        disable_perf,       METH_NOARGS,  NULL},
     {"enable_ust",          enable_ust,         METH_NOARGS,  NULL},
     {"disable_ust",         disable_ust,        METH_NOARGS,  NULL},
     {"set_callback",        set_callback,       METH_VARARGS, NULL},
     {"do_callback",         do_callback,        METH_VARARGS, NULL},
     {"do_raise",            do_raise,           METH_VARARGS, NULL},
+    {"ust_traceback",       ust_traceback,		METH_VARARGS, NULL},
     {NULL, NULL, 0, NULL}
 };
 
