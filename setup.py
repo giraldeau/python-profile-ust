@@ -12,7 +12,7 @@ ext = [
             'linuxProfile.api',
             sources = glob.glob('ext/*.c'),
             include_dirs=['ext/'],
-            libraries=['lttng-ust', 'dl'],
+            libraries=['perfuser', 'lttng-ust', 'dl'],
             extra_compile_args = ['-O2'],
     ),
 ]
