@@ -1,2 +1,2 @@
 from linuxProfile import cli
-cli.run(cli.ProfileRunnerUst())
+cli.run(cli.ProfileRunnerUST())

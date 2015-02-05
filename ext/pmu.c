@@ -49,7 +49,8 @@ PyObject *
 traceback_ust(PyObject* self, PyObject* args)
 {
     PyFrameObject *frame;
-    int depth = 0;
+    PyObject *co_filename, *co_name;
+    size_t depth = 0;
 
     frame = PyEval_GetFrame();
     while (frame != NULL && depth < DEPTH_MAX) {
@@ -61,10 +62,13 @@ traceback_ust(PyObject* self, PyObject* args)
         }
         struct frame *item = &tsf[depth];
         memset(item, 0, sizeof(*item));
-        item->co_filename= PyBytes_AsString(PyUnicode_AsUTF8String(frame->f_code->co_filename));
-        item->co_filename_len = PyBytes_GET_SIZE(frame->f_code->co_filename);
-        item->co_name = PyBytes_AsString(PyUnicode_AsUTF8String(frame->f_code->co_name));
-        item->co_name_len = PyBytes_GET_SIZE(frame->f_code->co_name);
+
+        co_filename = frame->f_code->co_filename;
+        co_name = frame->f_code->co_name;
+        item->co_filename= PyUnicode_DATA(co_filename);
+        item->co_filename_len = PyUnicode_GET_DATA_SIZE(co_filename);
+        item->co_name = PyUnicode_DATA(co_name);
+        item->co_name_len = PyUnicode_GET_DATA_SIZE(co_name);
         item->lineno = PyFrame_GetLineNumber(frame);
         frame = frame->f_back;
         depth++;

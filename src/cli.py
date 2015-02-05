@@ -18,11 +18,17 @@ class ProfileRunner(object):
     def disable(self):
         pass
 
-class ProfileRunnerUst(ProfileRunner):
+class ProfileRunnerUST(ProfileRunner):
     def enable(self):
         api.enable_ust()
     def disable(self):
         api.disable_ust()
+
+class ProfileRunnerPerf(ProfileRunner):
+    def enable(self):
+        api.enable_perf()
+    def disable(self):
+        api.disable_perf()
 
 def run(prof):
     import os
