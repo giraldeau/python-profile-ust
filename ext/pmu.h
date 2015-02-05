@@ -20,6 +20,6 @@ struct frame {
 
 extern PyObject* enable_perf(PyObject* self, PyObject* args);
 extern PyObject* disable_perf(PyObject* self, PyObject* args);
-extern PyObject* ust_traceback(PyObject* self, PyObject *args);
+extern PyObject* traceback_ust(PyObject* self, PyObject *args);
 
 #endif /* PMU_H_ */

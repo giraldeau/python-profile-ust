@@ -20,7 +20,7 @@ static __thread struct frame tsf[DEPTH_MAX];
 
 static void handle_signal(void *data)
 {
-    ust_traceback(NULL, NULL);
+    traceback_ust(NULL, NULL);
 }
 
 static struct perfuser conf = {
@@ -46,7 +46,7 @@ disable_perf(PyObject* self, PyObject* args)
 }
 
 PyObject *
-ust_traceback(PyObject* self, PyObject* args)
+traceback_ust(PyObject* self, PyObject* args)
 {
     PyFrameObject *frame;
     int depth = 0;
@@ -57,7 +57,6 @@ ust_traceback(PyObject* self, PyObject* args)
               frame->f_code != NULL && PyCode_Check(frame->f_code) &&
               frame->f_code->co_filename != NULL && PyUnicode_Check(frame->f_code->co_filename) &&
               frame->f_code->co_name != NULL && PyUnicode_Check(frame->f_code->co_name))) {
-            printf("Error: bad frame\n");
             break;
         }
         struct frame *item = &tsf[depth];
@@ -71,6 +70,5 @@ ust_traceback(PyObject* self, PyObject* args)
         depth++;
     }
     tracepoint(python, traceback, tsf, depth);
-    printf("ust_traceback depth=%d\n", depth);
     Py_RETURN_NONE;
 }

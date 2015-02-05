@@ -10,8 +10,8 @@ class Foo(object):
         self.baz()
     def baz(self):
         print("sys_traceback depth=%d" % (len(traceback.extract_stack())))
-        api.ust_traceback()
+        api.traceback_ust()
 
-def test_ust_traceback():
+def test_traceback_ust():
     foo = Foo()
     foo.foo()
