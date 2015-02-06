@@ -20,6 +20,7 @@ static PyMethodDef PythonProfileLttngMethods[] =
     {"do_callback",         do_callback,        METH_VARARGS, NULL},
     {"do_raise",            do_raise,           METH_VARARGS, NULL},
     {"traceback_ust",       traceback_ust,		METH_VARARGS, NULL},
+    {"is_frame_utf8",       is_frame_utf8,      METH_VARARGS, NULL},
     {NULL, NULL, 0, NULL}
 };
 
