@@ -14,10 +14,28 @@
 
 #include "tp.h"
 #include "pmu.h"
+#include "encode.h"
 
 #define DEPTH_MAX 100
 static __thread struct frame tsf[DEPTH_MAX];
 
+/*
+ * We don't use TLS here, seems to possible to access a thread data from
+ * another thread, nor with pthread_getspecific().
+ *
+ * Instead, we use a counter for the number of enable/disable. If the gen
+ * variable is lower than the current ref variable, then the frame may not be
+ * valid.
+ */
+
+static __thread PyFrameObject *top;
+static __thread int gen;
+static int ref = 0;
+static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
+
+/*
+ * Signal handler
+ */
 static void handle_signal(void *data)
 {
     traceback_ust(NULL, NULL);
@@ -29,19 +47,91 @@ static struct perfuser conf = {
     .data = NULL,
 };
 
+/*
+ * Function callback for signal safety:
+ *  - encode ahead the unicode strings to UTF-8
+ *  - keep a pointer to the top-frame
+ */
+
+static inline void
+set_top_frame(PyFrameObject *frame)
+{
+    /* make sure the top frame is assigned before the generation is set */
+    top = frame;
+    __sync_synchronize();
+    if (gen != ref) {
+        gen = ref;
+    }
+}
+
+static inline PyFrameObject *
+get_top_frame(void)
+{
+    return (gen == ref) ? top : NULL;
+}
+
+static int
+function_handler(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg)
+{
+    if (what == PyTrace_CALL) {
+        get_utf8(frame->f_code->co_name);
+        get_utf8(frame->f_code->co_filename);
+        set_top_frame(frame);
+    } else if (what == PyTrace_RETURN) {
+        set_top_frame(frame->f_back); // does the frame is the about-to-return one?
+    }
+    return 0;
+}
+
+static void
+warm_frames(void)
+{
+    PyThreadState *tstate;
+    PyFrameObject *frame;
+
+    /* warm the current interpreter */
+    tstate = PyThreadState_Get();
+    while (tstate != NULL) {
+        frame = _PyThreadState_GetFrame(tstate);
+        while (frame != NULL) {
+            get_utf8(frame->f_code->co_name);
+            get_utf8(frame->f_code->co_filename);
+            frame = frame->f_back;
+        }
+        tstate = PyThreadState_Next(tstate);
+    }
+}
+
+/* FIXME: report error */
 PyObject*
 enable_perf(PyObject* self, PyObject* args)
 {
-    int ret = perfuser_register(&conf);
+    (void) self, (void) args;
+    int ret;
+
+    pthread_mutex_lock(&lock);
+    ref += 1;
+    PyEval_SetProfile(function_handler, NULL);
+    warm_frames();
+    ret = perfuser_register(&conf);
     printf("perfuser_register=%d\n", ret);
+    if (ret < 0) {
+        PyEval_SetProfile(NULL, NULL);
+    }
+    pthread_mutex_unlock(&lock);
     Py_RETURN_NONE;
 }
 
 PyObject*
 disable_perf(PyObject* self, PyObject* args)
 {
+    (void) self, (void) args;
+
+    pthread_mutex_lock(&lock);
     int ret = perfuser_unregister();
     printf("perfuser_unregister=%d\n", ret);
+    PyEval_SetProfile(NULL, NULL);
+    pthread_mutex_unlock(&lock);
     Py_RETURN_NONE;
 }
 
@@ -58,7 +148,7 @@ traceback_ust(PyObject* self, PyObject* args)
     PyFrameObject *frame;
     size_t depth = 0;
 
-    frame = PyEval_GetFrame();
+    frame = get_top_frame();
     while (frame != NULL && depth < DEPTH_MAX) {
         if (!(PyFrame_Check(frame) &&
               frame->f_code != NULL && PyCode_Check(frame->f_code) &&
@@ -82,18 +172,6 @@ traceback_ust(PyObject* self, PyObject* args)
 static inline int
 is_utf8(PyObject *unicode)
 {
-    printf("PyUnicode_Check       = %d\n", PyUnicode_Check(unicode));
-    printf("PyUnicode_UTF8        = %p\n", PyUnicode_UTF8(unicode));
-    printf("PyUnicode_UTF8_LENGTH = %lu\n", PyUnicode_UTF8_LENGTH(unicode));
-    printf("PyUnicode_UTF8        = %s\n", PyUnicode_UTF8(unicode));
-
-    printf("PyUnicode_STR         = %s\n", PyBytes_AsString(PyUnicode_AsUTF8String(unicode)));
-    printf("PyUnicode_KIND        = %d\n", PyUnicode_KIND(unicode));
-    printf("PyUnicode_IS_COMPACT  = %d\n", PyUnicode_IS_COMPACT(unicode));
-    printf("PyUnicode_DATA        = %p\n", PyUnicode_DATA(unicode));
-    printf("PyUnicode_DATA        = %s\n", PyUnicode_DATA(unicode));
-    printf("\n");
-
     return PyUnicode_Check(unicode) &&
             PyUnicode_UTF8(unicode) != NULL &&
             PyUnicode_UTF8_LENGTH(unicode) > 0;
@@ -104,18 +182,11 @@ is_frame_utf8(PyObject* self, PyObject* args)
 {
     PyFrameObject *frame = PyEval_GetFrame();
     while (frame != NULL) {
-        printf("before\n");
-        is_utf8(frame->f_code->co_name);
-        PyUnicode_AsUTF8(frame->f_code->co_name);
-        printf("after\n");
-        is_utf8(frame->f_code->co_name);
-        /*
         if (!(PyFrame_Check(frame)
                 && is_utf8(frame->f_code->co_filename)
                 && is_utf8(frame->f_code->co_name))) {
             Py_RETURN_FALSE;
         }
-        */
         frame = frame->f_back;
     }
     Py_RETURN_TRUE;

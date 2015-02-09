@@ -10,6 +10,7 @@
 
 #include "tp.h"
 #include "ust.h"
+#include "encode.h"
 
 PyObject*
 enable_ust(PyObject* self, PyObject* args)
@@ -30,30 +31,28 @@ disable_ust(PyObject* self, PyObject* args)
 int
 profile_func_ust(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg)
 {
-    PyObject *str;
     const char *name;
     switch(what) {
-    case 0:
-        str = PyUnicode_AsUTF8String(frame->f_code->co_name);
-        name = PyBytes_AsString(str);
+    case PyTrace_CALL:
+        name = get_utf8(frame->f_code->co_name);
         tracepoint(python, call, name);
         break;
-    case 1: /* the event 'exception' is not triggered by CPython */
-    case 2:
+    case PyTrace_EXCEPTION: /* the event 'exception' is not triggered by CPython */
+    case PyTrace_LINE:
         break;
-    case 3:
+    case PyTrace_RETURN:
         tracepoint(python, return);
         break;
-    case 4:
+    case PyTrace_C_CALL:
         if (PyCFunction_Check(arg)) {
             name = ((PyCFunctionObject *)arg)->m_ml->ml_name;
             tracepoint(python, c_call, name);
         }
         break;
-    case 5:
+    case PyTrace_C_EXCEPTION:
         // TODO: handle c_exception event
         break;
-    case 6:
+    case PyTrace_C_RETURN:
         tracepoint(python, c_return);
         break;
     default:
