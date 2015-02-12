@@ -33,12 +33,17 @@ static __thread int gen;
 static int ref = 0;
 static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
+/* forward definition for handle_signal */
+static void do_traceback_ust(PyFrameObject *frame);
+static inline PyFrameObject *get_top_frame(void);
+
 /*
  * Signal handler
  */
+
 static void handle_signal(void *data)
 {
-    traceback_ust(NULL, NULL);
+    do_traceback_ust(get_top_frame());
 }
 
 static struct perfuser conf = {
@@ -46,6 +51,7 @@ static struct perfuser conf = {
     .sample = handle_signal,
     .data = NULL,
 };
+
 
 /*
  * Function callback for signal safety:
@@ -142,13 +148,9 @@ populate_utf8(PyObject *unicode, char **str, size_t *len)
     *len = PyUnicode_UTF8_LENGTH(unicode);
 }
 
-PyObject *
-traceback_ust(PyObject* self, PyObject* args)
+static void do_traceback_ust(PyFrameObject *frame)
 {
-    PyFrameObject *frame;
     size_t depth = 0;
-
-    frame = get_top_frame();
     while (frame != NULL && depth < DEPTH_MAX) {
         if (!(PyFrame_Check(frame) &&
               frame->f_code != NULL && PyCode_Check(frame->f_code) &&
@@ -166,6 +168,14 @@ traceback_ust(PyObject* self, PyObject* args)
         depth++;
     }
     tracepoint(python, traceback, tsf, depth);
+}
+
+
+
+PyObject *
+traceback_ust(PyObject* self, PyObject* args)
+{
+    do_traceback_ust(PyEval_GetFrame());
     Py_RETURN_NONE;
 }
 
