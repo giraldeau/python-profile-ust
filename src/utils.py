@@ -15,7 +15,7 @@ class Timespec(object):
             tv_nsec += Timespec.NSEC_PER_SEC
         return Timespec(tv_sec, tv_nsec)
     def float(self):
-        return self.tv_sec + self.tv_nsec / Timespec.NSEC_PER_SEC
+        return self.tv_sec + float(self.tv_nsec) / Timespec.NSEC_PER_SEC
     def __eq__(self, other):
         return ((self.tv_sec, self.tv_nsec) ==
                 (other.tv_sec, other.tv_nsec))

@@ -11,7 +11,7 @@ def test_clock_gettime_timespec():
 
 def test_timespec_float():
     ts = Timespec(3, 141600000)
-    assert((ts.float() - 3.1416) < 0.0001)
+    assert(abs(ts.float() - 3.1416) < 0.0001)
 
 def test_timespec_cmp():
     t1 = Timespec(1, 10)
