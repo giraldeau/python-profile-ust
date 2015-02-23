@@ -2,58 +2,61 @@
 Tools to analyze the LTTng-UST trace
 """
 
-class TreeVisitor(object):
-    def __init__(self):
-        pass
-    def visit(self, node, depth):
-        pass
-
-class RecordVisitor(TreeVisitor):
-    def __init__(self):
-        self.visited = []
-    def visit(self, node, depth):
-        self.visited.append((node.key, depth))
-    def get_visited(self):
-        return self.visited
-
 class ProfileTree(object):
     def __init__(self, key=None):
-        self.parent = None
         self.key = key
-        self.value = 0
-        self.children = {}
-        self.children_sum = 0
-        self.dirty = False
+        self._parent = None
+        self._value = 0
+        self._children_map = {}
+        self._children_sum = 0
+        self._dirty = False
 
     def add_child(self, child):
-        child.set_parent(self)
-        self.children[child.key] = child
+        child.parent = self
+        self._children_map[child.key] = child
         return child
 
-    def set_parent(self, parent):
-        self.parent = parent
+    @property
+    def parent(self):
+        return self._parent
+        self._parent = parent
+
+    @parent.setter
+    def parent(self, parent):
+        self._parent = parent
+
+    @property
+    def dirty(self):
+        return self._dirty
+
+    @dirty.setter
+    def dirty(self, state=True):
+        self._dirty = state
+        if state is True and self.parent is not None:
+            self.parent.dirty = True
 
     def get_child(self, key):
-        return self.children.get(key, None)
+        return self._children_map.get(key, None)
 
     def get_or_create_child(self, key):
-        if key in self.children:
-            return self.children.get(key)
+        if key in self._children_map:
+            return self._children_map.get(key)
         return self.add_child(ProfileTree(key))
 
     def get_or_create_branch(self, path):
-        res = [self]
+        node = self
         for p in path:
-            res.append(node.get_or_create_child(p))
-        return res
+            node = node.get_or_create_child(p)
+        return node
 
-    def set_dirty(self):
+    @property
+    def value(self):
+        return self._value
+
+    @value.setter
+    def value(self, value):
+        self._value = value
         self.dirty = True
-        self.parent.set_dirty()
-
-    def set_value(self, value):
-        self.value = value
-        self.set_dirty()
 
     def get_total(self):
         total = self.value
@@ -66,34 +69,39 @@ class ProfileTree(object):
     def get_value(self):
         return self.value
 
+    def get_path(self):
+        path = []
+        node = self
+        while (node is not None):
+            path.append(node)
+            node = node.parent
+        path.reverse()
+        return path
+
     def refresh(self):
         self.children_sum = 0
-        for child in self.children.values():
+        for child in self.children:
             child.refresh()
             self.children_sum += child.get_children()
 
-    def preorder(self, visitor):
+    @property
+    def children(self):
+        return list(self._children_map.values())
+
+    def preorder(self):
         queue = [self]
         level = [1]
         while(len(queue) > 0):
             node = queue.pop(0)
             depth = len(level) - 1
             level[0] -= 1
-            visitor.visit(node, depth)
+            yield (node, depth)
             nr_children = len(node.children)
             if (nr_children > 0):
                 level.insert(0, nr_children)
-                queue = list(node.children.values()) + queue
+                queue = node.children + queue
             if level[0] == 0:
                 level.pop(0)
-
-    def depthfirst(self, visitor):
-        self._depthfirst(visitor, self, 0)
-
-    def _depthfirst(self, visitor, node, depth):
-        for child in node.children.values():
-            self._depthfirst(visitor, child, depth + 1)
-        visitor.visit(node, depth)
 
     def __repr__(self):
         return "({}: {})".format(self.key, self.value)
