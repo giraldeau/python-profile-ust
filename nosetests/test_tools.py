@@ -41,13 +41,9 @@ def test_create():
 
 def test_profile():
     root = ProfileTree("root")
-    trace = [["a", "b", "c"], ["a", "b"], ["a"]]
+    trace = [["a", "b", "c"], ["a", "c"]]
+    # (path, total, self, children)
+    exp = [ ("/a",2,0,2), ("/a/b",1,0,1), ("/a/b/c",1,1,0), ("/a/c",1,1,0) ]
     for ev in trace:
         node = root.get_or_create_branch(ev)
         node.value += 1
-    exp_preorder = [("root", 0), ("a", 1), ("b", 2), ("c", 3)]
-    exp_depthfirst = [("c", 3), ("b", 2), ("a", 1), ("root", 0)]
-    profile = [("c", 1), ("b", 2), ("a", 3), ("root", 3)]
-    check_tree(root.preorder, RecordVisitor(), exp_preorder)
-    check_tree(root.depthfirst, RecordVisitor(), exp_depthfirst)
-    check_tree(root.depthfirst, ProfileVisitor(), profile)
