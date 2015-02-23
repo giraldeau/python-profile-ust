@@ -3,8 +3,21 @@ from linuxProfile.tools import ProfileTree
 def test_print():
     assert("(42: 0)" == str(ProfileTree(42)))
 
-def check_list(exp, gen):
-    act = list((x[0].key, x[1]) for x in gen())
+def make_key_depth(gen):
+    return list((node.key, depth) for node, depth in gen())
+
+def make_path_stats(gen):
+    res = []
+    print()
+    for node, depth in gen():
+        print("%-10s %3d %3d %3d" % (" " * depth + node.key,
+                                   node.total,
+                                   node.value,
+                                   node.children_sum))
+        res.append(node)
+    return res
+
+def check_list(exp, act):
     eq = (exp == act)
     if (not eq):
         print("\nexp: {}\nact: {}".format(exp, act))
@@ -28,14 +41,14 @@ def test_tree():
     n10.add_child(n22)
 
     exp = [(0, 0), (10, 1), (20, 2), (21, 2), (22, 2), (11, 1), (12, 1)]
-    check_list(exp, n00.preorder)
+    check_list(exp, make_key_depth(n00.preorder))
 
 def test_create():
     root = ProfileTree("root")
     ev = ["foo", "bar", "baz"]
     root.get_or_create_branch(ev)
     exp = [("root", 0), ("foo", 1), ("bar", 2), ("baz", 3)]
-    check_list(exp, root.preorder)
+    check_list(exp, make_key_depth(root.preorder))
 
 def test_property_value():
     root = ProfileTree("foo")
@@ -50,3 +63,5 @@ def test_profile():
     for ev in trace:
         leaf = root.get_or_create_branch(ev)
         leaf.value += 1
+    res = make_path_stats(root.preorder)
+    print(res)

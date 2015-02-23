@@ -58,18 +58,21 @@ class ProfileTree(object):
         self._value = value
         self.dirty = True
 
-    def get_total(self):
-        total = self.value
+    @property
+    def children_sum(self):
+        return self.total - self.value
+
+    @property
+    def total(self):
         if self.dirty:
-            self.refresh()
-        for child in self.children.values():
-            total += child.get_total()
-        return total
+            self._total = self.value
+            for child in self.children:
+                self._total += child.total
+            self.dirty = False
+        return self._total
 
-    def get_value(self):
-        return self.value
-
-    def get_path(self):
+    @property
+    def path(self):
         path = []
         node = self
         while (node is not None):
@@ -78,15 +81,10 @@ class ProfileTree(object):
         path.reverse()
         return path
 
-    def refresh(self):
-        self.children_sum = 0
-        for child in self.children:
-            child.refresh()
-            self.children_sum += child.get_children()
-
     @property
     def children(self):
-        return list(self._children_map.values())
+        for x in self._children_map.values():
+            yield x
 
     def preorder(self):
         queue = [self]
@@ -96,10 +94,10 @@ class ProfileTree(object):
             depth = len(level) - 1
             level[0] -= 1
             yield (node, depth)
-            nr_children = len(node.children)
+            nr_children = len(list(node.children))
             if (nr_children > 0):
                 level.insert(0, nr_children)
-                queue = node.children + queue
+                queue = list(node.children) + queue
             if level[0] == 0:
                 level.pop(0)
 
