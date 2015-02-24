@@ -1,2 +1,2 @@
-from linuxProfile import cli
-cli.run(cli.ProfileRunnerUST())
+from linuxProfile import launch
+launch.run(launch.ProfileRunnerUST())
