@@ -10,18 +10,18 @@ def make_path_stats(gen):
     res = []
     print()
     for node, depth in gen():
-        print("%-10s %3d %3d %3d" % (" " * depth + node.key,
-                                   node.total,
-                                   node.value,
-                                   node.children_sum))
-        res.append(node)
+        path = "/" + "/".join([x.key for x in node.path])
+        item = (path, node.total, node.value, node.children_sum)
+        res.append(item)
     return res
 
 def check_list(exp, act):
-    eq = (exp == act)
-    if (not eq):
-        print("\nexp: {}\nact: {}".format(exp, act))
-    assert(eq)
+    s1 = frozenset(exp)
+    s2 = frozenset(act)
+    diff = s1.symmetric_difference(s2)
+    if len(diff) != 0:
+        print("\nexp: {}\nact: {}\ndiff: {}\n".format(exp, act, diff))
+    assert(len(diff) == 0)
 
 def test_tree():
     n00 = ProfileTree(0)
@@ -59,9 +59,9 @@ def test_profile():
     root = ProfileTree("root")
     trace = [["a", "b", "c"], ["a", "c"]]
     # (path, total, self, children)
-    exp = [ ("/a", 2, 0, 2), ("/a/b", 1, 0, 1), ("/a/b/c", 1, 1, 0), ("/a/c", 1, 1, 0) ]
+    exp = [ ("/root", 2, 0, 2), ("/root/a", 2, 0, 2), ("/root/a/b", 1, 0, 1), ("/root/a/b/c", 1, 1, 0), ("/root/a/c", 1, 1, 0) ]
     for ev in trace:
         leaf = root.get_or_create_branch(ev)
         leaf.value += 1
-    res = make_path_stats(root.preorder)
-    print(res)
+    act = make_path_stats(root.preorder)
+    check_list(exp, act)
