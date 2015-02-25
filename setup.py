@@ -1,4 +1,4 @@
-from distutils.core import setup, Extension
+from setuptools import setup, Extension
 import glob
 import sys
 
@@ -17,6 +17,12 @@ ext = [
             extra_compile_args = ['-O2'],
     ),
 ]
+
+entry_points = {
+    'console_scripts': [
+        'pyperf = linuxProfile.cli:main'
+    ],
+}
  
 setup (name = 'python-linux-profile',
         version = '1.0',
@@ -24,5 +30,6 @@ setup (name = 'python-linux-profile',
         ext_modules = ext,
         packages = ['linuxProfile'],
 	package_dir = {'linuxProfile': 'src'},
+        entry_points = entry_points,
 )
 

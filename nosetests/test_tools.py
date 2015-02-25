@@ -1,4 +1,6 @@
-from linuxProfile.tools import ProfileTree
+from linuxProfile.tools import ProfileTree, CalltreeReport
+import sys # temp
+from collections import namedtuple
 
 def test_print():
     assert("(42: 0)" == str(ProfileTree(42)))
@@ -65,3 +67,46 @@ def test_profile():
         leaf.value += 1
     act = make_path_stats(root.preorder)
     check_list(exp, act)
+
+def yaml_trace(yam):
+    with open(yam) as f:
+        trace = yaml.load(f)
+        print(trace)
+        for event in trace['events']:
+            yield event
+
+class StubFrame(dict):
+    def __init__(self, co_name, co_filename = "<module>", lineno = 42):
+        super(StubFrame, self).__init__()
+        self["co_name"] = co_name
+        self["co_filename"] = co_filename
+        self["lineno"] = lineno
+
+traces = {
+    "basic": [
+        { "frames": [ StubFrame('baz'),
+                      StubFrame('bar'),
+                      StubFrame('foo'),]
+        },
+        { "frames": [ StubFrame('baz'),
+                      StubFrame('foo'),]
+        },
+    ]
+}
+
+def test_profile_samples():
+    root = ProfileTree("root")
+    for name, events in traces.items():
+        print("processing " + name)
+        for event in events:
+            frames = event["frames"]
+            frames.reverse()
+            print(frames)
+            node = root
+            for frame in frames:
+                print(frame)
+                node = node.get_or_create_child(frame["co_name"])
+            node.value += 1
+    report = CalltreeReport()
+    report.write(sys.stdout, root)
+    

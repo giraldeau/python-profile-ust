@@ -7,8 +7,9 @@ class ProfileTree(object):
         self.key = key
         self._parent = None
         self._value = 0
-        self._children_map = {}
+        self._total = 0
         self._children_sum = 0
+        self._children_map = {}
         self._dirty = False
 
     def add_child(self, child):
@@ -103,3 +104,17 @@ class ProfileTree(object):
 
     def __repr__(self):
         return "({}: {})".format(self.key, self.value)
+
+class CalltreeReport(object):
+    def __init__(self):
+        pass
+    def write(self, file, root):
+        # symbol | self | total
+        file.write("%-30s %6s %6s\n" % ("symbol", "self", "total"))
+        total = float(root.total) / 100
+        for node, depth in root.preorder():
+            indent = " " * depth
+            file.write("%-30s %6.0f %6.0f\n" %
+                  (indent + node.key,
+                   node.value / total,
+                   node.total / total))
