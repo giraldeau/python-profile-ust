@@ -1,10 +1,13 @@
+import traceback
 import argparse
 import sys
 import os
 
 from linuxProfile.commands.report import ReportCommand
+from linuxProfile.commands.record import RecordCommand
 
 cmds = {
+    'record': RecordCommand,
     'report': ReportCommand,
 }
 
@@ -26,4 +29,6 @@ def main():
     try:
         args.obj.handle(args)
     except Exception as e:
+        if args.verbose:
+            traceback.print_exc()
         print(e)

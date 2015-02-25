@@ -167,7 +167,7 @@ class CalltreeReport(object):
         total = float(root.total) / 100
         for node, depth in root.preorder():
             indent = " " * depth
-            file.write("%-30s %6.0f %6.0f\n" %
+            file.write("%-30s %6.1f%% %6.1f%%\n" %
                   (indent + node.key,
                    node.value / total,
                    node.total / total))
