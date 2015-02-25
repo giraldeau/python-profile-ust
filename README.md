@@ -77,3 +77,13 @@ Trace produced:
 [17:27:14.772496402] (+0.000017516) berta python:c_call: { cpu_id = 4 }, { co_name = "disable" }
 ```
 
+## Develop mode ##
+
+Source the file `env.sh`, and then build the project in develop mode:
+
+```bash
+python3 setup.py develop --install-dir=develop/
+```
+
+The linuxProfile module will be installed as normal user and available for
+import in Python 3.
