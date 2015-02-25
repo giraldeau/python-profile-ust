@@ -29,7 +29,6 @@ setup (name = 'python-linux-profile',
         description = 'Trace Python under Linux',
         ext_modules = ext,
         packages = ['linuxProfile'],
-	package_dir = {'linuxProfile': 'src'},
         entry_points = entry_points,
 )
 

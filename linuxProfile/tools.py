@@ -1,6 +1,8 @@
 """
 Tools to analyze the LTTng-UST trace
 """
+import babeltrace
+import os
 
 class ProfileTree(object):
     def __init__(self, key=None):
@@ -102,8 +104,59 @@ class ProfileTree(object):
             if level[0] == 0:
                 level.pop(0)
 
+    def query(self, path):
+        items = path
+        if isinstance(path, str):
+            items = path.strip("/").split("/")
+        node = self
+        for item in items:
+            node = node.get_child(item)
+            if node == None:
+                break
+        return node
+
     def __repr__(self):
         return "({}: {})".format(self.key, self.value)
+
+class PythonTracebackEventHandler(object):
+    def __init__(self, root=None):
+        self.root = root
+        if self.root is None:
+            self.root = ProfileTree("root")
+        self.count = 0
+
+    def handle(self, event):
+        if event.name != "python:traceback":
+            return
+        frames = event.get("frames", [])
+        frames.reverse()
+        node = self.root
+        for frame in frames:
+            node = node.get_or_create_child(frame.get("co_name", "unkown"))
+        # increment the leaf
+        node.value += 1
+        self.count += 1
+
+def build_profile(trace, root):
+    handler = PythonTracebackEventHandler(root)
+    for event in trace.events:
+        handler.handle(event)
+
+def find(dir, fname):
+    for parent, dirs, files in os.walk(dir):
+        if fname in files:
+            yield parent
+
+def load_trace(paths):
+    if isinstance(paths, str):
+        paths = [paths]
+    trace = babeltrace.TraceCollection()
+    for path in paths:
+        for dir in find(path, "metadata"):
+            ret = trace.add_trace(dir, "ctf")
+            if ret == None:
+                raise IOError("failed to load trace %s" % (repr(path)))
+    return trace
 
 class CalltreeReport(object):
     def __init__(self):

@@ -1,6 +1,22 @@
-from linuxProfile.tools import ProfileTree, CalltreeReport
-import sys # temp
+from linuxProfile.tools import ProfileTree, CalltreeReport, PythonTracebackEventHandler, build_profile
+import sys  # temp
 from collections import namedtuple
+
+class StubTrace(dict):
+    pass
+
+class StubEvent(dict):
+    pass
+
+class StubFrame(dict):
+    def __init__(self, co_name, co_filename="<module>", lineno=42):
+        super(StubFrame, self).__init__()
+        self["co_name"] = co_name
+        self["co_filename"] = co_filename
+        self["lineno"] = lineno
+
+class StubStat(namedtuple("StubStat", "path total value children_sum")):
+    pass
 
 def test_print():
     assert("(42: 0)" == str(ProfileTree(42)))
@@ -10,12 +26,19 @@ def make_key_depth(gen):
 
 def make_path_stats(gen):
     res = []
-    print()
     for node, depth in gen():
         path = "/" + "/".join([x.key for x in node.path])
         item = (path, node.total, node.value, node.children_sum)
         res.append(item)
     return res
+
+def check_profile(root, stats):
+    for stat in stats:
+        node = root.query(stat.path)
+        assert(node != None)
+        assert(node.total == stat.total)
+        assert(node.value == stat.value)
+        assert(node.children_sum == stat.children_sum)
 
 def check_list(exp, act):
     s1 = frozenset(exp)
@@ -75,38 +98,35 @@ def yaml_trace(yam):
         for event in trace['events']:
             yield event
 
-class StubFrame(dict):
-    def __init__(self, co_name, co_filename = "<module>", lineno = 42):
-        super(StubFrame, self).__init__()
-        self["co_name"] = co_name
-        self["co_filename"] = co_filename
-        self["lineno"] = lineno
-
 traces = {
     "basic": [
         { "frames": [ StubFrame('baz'),
                       StubFrame('bar'),
-                      StubFrame('foo'),]
+                      StubFrame('foo'), ]
         },
         { "frames": [ StubFrame('baz'),
-                      StubFrame('foo'),]
+                      StubFrame('foo'), ]
         },
     ]
 }
 
+exp_stats = {
+    "basic": [StubStat("/foo", 2, 0, 2),
+             ]
+}
+
+def wrap_events(events, attr, val):
+    stubs = []
+    for event in events:
+        stub = StubEvent(event)
+        setattr(stub, attr, val)
+        stubs.append(stub)
+    return stubs
+
 def test_profile_samples():
-    root = ProfileTree("root")
     for name, events in traces.items():
-        print("processing " + name)
-        for event in events:
-            frames = event["frames"]
-            frames.reverse()
-            print(frames)
-            node = root
-            for frame in frames:
-                print(frame)
-                node = node.get_or_create_child(frame["co_name"])
-            node.value += 1
-    report = CalltreeReport()
-    report.write(sys.stdout, root)
-    
+        trace = StubTrace()
+        trace.events = wrap_events(events, "name", "python:traceback")
+        root = ProfileTree("root")
+        build_profile(trace, root)
+        check_profile(root, exp_stats[name])
