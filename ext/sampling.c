@@ -1,5 +1,5 @@
 /*
- * pmu.c
+ * sampling.c
  *
  *  Created on: Jan 15, 2015
  *      Author: francis
@@ -18,11 +18,21 @@
 #include <fcntl.h>
 
 #include "tp.h"
-#include "pmu.h"
+#include "sampling.h"
 #include "encode.h"
 
 #define DEPTH_MAX 100
 static struct frame tsf[DEPTH_MAX];
+
+/*
+define the list of available events: copy it from perf
+group -> list of event types (type,config)
+open one file per event, group them
+configure the signal, mmap the buffers
+read event types since last read, record types or'd and count
+use select to know which fds to read
+ */
+
 
 /*
  * We don't use TLS here, seems to possible to access a thread data from

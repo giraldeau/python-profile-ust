@@ -1,12 +1,12 @@
 /*
- * pmu.h
+ * sampling.h
  *
  *  Created on: Jan 15, 2015
  *      Author: francis
  */
 
-#ifndef PMU_H_
-#define PMU_H_
+#ifndef SAMPLING_H_
+#define SAMPLING_H_
 
 struct frame {
 	char *co_filename;
@@ -21,4 +21,4 @@ extern PyObject* disable_perf(PyObject* self, PyObject* args);
 extern PyObject* traceback_ust(PyObject* self, PyObject *args);
 extern PyObject* is_frame_utf8(PyObject* self, PyObject *args);
 
-#endif /* PMU_H_ */
+#endif /* SAMPLING_H_ */

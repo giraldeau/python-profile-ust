@@ -12,7 +12,7 @@
 #include <frameobject.h>
 #include <unicodeobject.h>
 
-#include "pmu.h"
+#include "sampling.h"
 
 /* disable template not working with ctf_struct patch */
 /*

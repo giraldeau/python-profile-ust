@@ -7,7 +7,7 @@
 #include <string.h>
 
 #include "ust.h"
-#include "pmu.h"
+#include "sampling.h"
 #include "clock.h"
 #include "except.h"
 
