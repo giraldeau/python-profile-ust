@@ -8,6 +8,8 @@
 #ifndef SAMPLING_H_
 #define SAMPLING_H_
 
+#include "perf.h"
+
 struct frame {
 	char *co_filename;
 	char *co_name;

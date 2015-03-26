@@ -1,6 +1,8 @@
 #include <Python.h>
 #include <frameobject.h>
 #include <unicodeobject.h>
+#include <dictobject.h>
+#include <longobject.h>
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -31,17 +33,81 @@ static struct PyModuleDef moduledef = {
         "api",
         NULL,
         0,
-        PythonProfileLttngMethods,
+        NULL,
         NULL,
         NULL,
         NULL,
         NULL
 };
 
+
+/*
+ * Module initialization copied in large part from
+ * linux/tools/perf/util/python.c
+ */
+
+/*
+ * UST module
+ */
+
+
+/*
+ * Sampling module
+ */
+
+static PyMethodDef sampling__methods[] = {
+    { .ml_name = NULL, }
+};
+
+static struct PyModuleDef sampling__moduledef = {
+        PyModuleDef_HEAD_INIT,
+        "sampling",
+        NULL,
+        0,
+        NULL,
+        NULL,
+        NULL,
+        NULL,
+        NULL
+};
+
+
 PyMODINIT_FUNC
 PyInit_api(void)
 {
+    int i;
+    PyObject *dict;
+    PyObject *proxy;
+    PyObject *submod;
+    PyObject *obj;
     PyObject *module = PyModule_Create(&moduledef);
-    return module;
-}
+    if (module == NULL)
+        goto error;
 
+    submod = PyModule_Create(&sampling__moduledef);
+    if (submod == NULL)
+        goto error;
+
+    PyModule_AddObject(module, "sampling", (PyObject*)submod);
+
+    dict = PyDict_New();
+    if (dict == NULL)
+        goto error;
+
+    for (i = 0; perf__constants[i].name != NULL; i++) {
+        obj = PyLong_FromLong(perf__constants[i].value);
+        if (obj == NULL)
+            goto error;
+        PyDict_SetItemString(dict, perf__constants[i].name, obj);
+        Py_DECREF(obj);
+    }
+
+    proxy = PyDictProxy_New(dict);
+    PyModule_AddObject(submod, "events", (PyObject*)proxy);
+    return module;
+
+error:
+    if (PyErr_Occurred())
+        PyErr_SetString(PyExc_ImportError, "linuxProfile: init failed");
+    return NULL;
+}
