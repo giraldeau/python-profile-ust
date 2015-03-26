@@ -9,15 +9,20 @@
 #include <unicodeobject.h>
 #include <bytesobject.h>
 #include <string.h>
-#include <libperfuser.h>
 #include <pthread.h>
+#include <unistd.h>
+#include <signal.h>
+#include <linux/perf_event.h>
+#include <sys/syscall.h>
+#include <sys/types.h>
+#include <fcntl.h>
 
 #include "tp.h"
 #include "pmu.h"
 #include "encode.h"
 
 #define DEPTH_MAX 100
-static __thread struct frame tsf[DEPTH_MAX];
+static struct frame tsf[DEPTH_MAX];
 
 /*
  * We don't use TLS here, seems to possible to access a thread data from
@@ -28,10 +33,9 @@ static __thread struct frame tsf[DEPTH_MAX];
  * valid.
  */
 
-static __thread PyFrameObject *top;
-static __thread int gen;
+static PyFrameObject *top;
+static int gen;
 static int ref = 0;
-static pthread_mutex_t lock = PTHREAD_MUTEX_INITIALIZER;
 
 /* forward definition for handle_signal */
 static void do_traceback_ust(PyFrameObject *frame);
@@ -45,13 +49,6 @@ static void handle_signal(void *data)
 {
     do_traceback_ust(get_top_frame());
 }
-
-static struct perfuser conf = {
-    .signum = SIGUSR1,
-    .sample = handle_signal,
-    .data = NULL,
-};
-
 
 /*
  * Function callback for signal safety:
@@ -113,18 +110,10 @@ PyObject*
 enable_perf(PyObject* self, PyObject* args)
 {
     (void) self, (void) args;
-    int ret;
 
-    pthread_mutex_lock(&lock);
     ref += 1;
     PyEval_SetProfile(function_handler, NULL);
     warm_frames();
-    ret = perfuser_register(&conf);
-    printf("perfuser_register=%d\n", ret);
-    if (ret < 0) {
-        PyEval_SetProfile(NULL, NULL);
-    }
-    pthread_mutex_unlock(&lock);
     Py_RETURN_NONE;
 }
 
@@ -133,11 +122,7 @@ disable_perf(PyObject* self, PyObject* args)
 {
     (void) self, (void) args;
 
-    pthread_mutex_lock(&lock);
-    int ret = perfuser_unregister();
-    printf("perfuser_unregister=%d\n", ret);
     PyEval_SetProfile(NULL, NULL);
-    pthread_mutex_unlock(&lock);
     Py_RETURN_NONE;
 }
 

@@ -12,7 +12,7 @@ ext = [
             'linuxProfile.api',
             sources = glob.glob('ext/*.c'),
             include_dirs=['ext/'],
-            libraries=['perfuser', 'lttng-ust', 'dl'],
+            libraries=['lttng-ust', 'dl'],
             #extra_compile_args = ['-O0', '-g'], # FIXME: add --enable-debug option
             extra_compile_args = ['-O2'],
     ),
@@ -31,4 +31,3 @@ setup (name = 'python-linux-profile',
         packages = ['linuxProfile'],
         entry_points = entry_points,
 )
-
