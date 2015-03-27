@@ -90,7 +90,7 @@ PyInit_api(void)
 
     PyModule_AddObject(module, "sampling", (PyObject*)submod);
 
-    dict = PyDict_New();
+    dict = PyModule_GetDict(submod);
     if (dict == NULL)
         goto error;
 
@@ -102,8 +102,6 @@ PyInit_api(void)
         Py_DECREF(obj);
     }
 
-    proxy = PyDictProxy_New(dict);
-    PyModule_AddObject(submod, "events", (PyObject*)proxy);
     return module;
 
 error:
