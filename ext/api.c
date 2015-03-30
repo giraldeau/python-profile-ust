@@ -46,26 +46,6 @@ static struct PyModuleDef moduledef = {
  * linux/tools/perf/util/python.c
  */
 
-/*
- * Sampling module
- */
-
-static PyMethodDef sampling__methods[] = {
-    { .ml_name = NULL, }
-};
-
-static struct PyModuleDef sampling__moduledef = {
-        PyModuleDef_HEAD_INIT,
-        "sampling",
-        NULL,
-        0,
-        NULL,
-        NULL,
-        NULL,
-        NULL,
-        NULL
-};
-
 PyMODINIT_FUNC
 PyInit_api(void)
 {

@@ -1,26 +1,27 @@
 from linuxProfile.api import sampling
+from linuxProfile import perf
 from nose.tools import assert_equals
 
 def test_import_sampling():
     assert_equals((len(sampling.__dict__) > 60), True)
-    print(sampling.TYPE_HARDWARE)
+    assert_equals(sampling.TYPE_SOFTWARE, 1)
+    assert_equals(sampling.TYPE_HARDWARE, 0)
 
 def test_create_event():
-    ev = sampling.Event()
-    print(ev.__doc__)
+    type, config = perf.SW_CPU_CLOCK
+    print(perf.SW_CPU_CLOCK)
+    ev = sampling.Event(type=type, config=config);
+    assert_equals(ev.type, type)
+    assert_equals(ev.config, config)
+
+def test_methods():
+    sampling.open()
+    sampling.close()
+    sampling.enable()
+    sampling.disable()
+
 
 """
-class Session(object):
-    group_fd
-    events = []
-    def enable(self):
-        pass
-    def disable(self):
-        pass
-
 class Event(object):
-    type
-    config
-    group_fd
     attr
 """

@@ -21,11 +21,10 @@ struct frame {
 typedef struct event_ob {
     PyObject_HEAD;
     struct perf_event_attr attr;
-    int fd;
-    int group_fd;
 } PyPerfEvent;
 
 extern PyTypeObject event_ob__type;
+extern PyModuleDef sampling__moduledef;
 
 extern PyObject* enable_perf(PyObject* self, PyObject* args);
 extern PyObject* disable_perf(PyObject* self, PyObject* args);

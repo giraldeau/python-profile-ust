@@ -8,6 +8,7 @@
 #include <frameobject.h>
 #include <unicodeobject.h>
 #include <bytesobject.h>
+#include <structmember.h>
 #include <string.h>
 #include <pthread.h>
 #include <unistd.h>
@@ -22,16 +23,6 @@
 
 #define DEPTH_MAX 100
 static struct frame tsf[DEPTH_MAX];
-
-/*
-define the list of available events: copy it from perf
-group -> list of event types (type,config)
-open one file per event, group them
-configure the signal, mmap the buffers
-read event types since last read, record types or'd and count
-use select to know which fds to read
- */
-
 
 /*
  * We don't use TLS here, seems to possible to access a thread data from
@@ -194,30 +185,123 @@ is_frame_utf8(PyObject* self, PyObject* args)
     Py_RETURN_TRUE;
 }
 
-int event_ob__init(PyPerfEvent *self, PyObject *args, PyObject *kwds)
+/*
+ * Event object type for perf event attributes
+ */
+
+int event_ob__init(PyPerfEvent *self, PyObject *args, PyObject *kwargs)
 {
-    printf("event_ob__init\n");
+    struct perf_event_attr attr;
+    static char *kwlist[] = {
+            "type",
+            "config",
+            "sample_freq",
+            "sample_period",
+            "sample_type",
+            "read_format",
+            "disabled",
+            "inherit",
+            "pinned",
+            "exclusive",
+            "exclude_user",
+            "exclude_kernel",
+            "exclude_hv",
+            "exclude_idle",
+            "mmap",
+            "comm",
+            "freq",
+            "inherit_stat",
+            "enable_on_exec",
+            "task",
+            "watermark",
+            "precise_ip",
+            "mmap_data",
+            "sample_id_all",
+            "wakeup_events",
+            "bp_type",
+            "bp_addr",
+            "bp_len",
+            NULL
+    };
+    uint64_t sample_period = 0;
+    uint32_t disabled = 0,
+            inherit = 0,
+            pinned = 0,
+            exclusive = 0,
+            exclude_user = 0,
+            exclude_kernel = 0,
+            exclude_hv = 0,
+            exclude_idle = 0,
+            mmap = 0,
+            comm = 0,
+            freq = 1,
+            inherit_stat = 0,
+            enable_on_exec = 0,
+            task = 0,
+            watermark = 0,
+            precise_ip = 0,
+            mmap_data = 0,
+            sample_id_all = 1;
+    int idx = 0;
+
+    if (!PyArg_ParseTupleAndKeywords(args, kwargs,
+            "|iKiKKiiiiiiiiiiiiiiiiiiiiiKK", kwlist,
+            &attr.type, &attr.config, &attr.sample_freq,
+            &sample_period, &attr.sample_type,
+            &attr.read_format, &disabled, &inherit,
+            &pinned, &exclusive, &exclude_user,
+            &exclude_kernel, &exclude_hv, &exclude_idle,
+            &mmap, &comm, &freq, &inherit_stat,
+            &enable_on_exec, &task, &watermark,
+            &precise_ip, &mmap_data, &sample_id_all,
+            &attr.wakeup_events, &attr.bp_type,
+            &attr.bp_addr, &attr.bp_len, &idx))
+        return -1;
+
+    /* union... */
+    if (sample_period != 0) {
+        if (attr.sample_freq != 0)
+            return -1; /* FIXME: throw right exception */
+        attr.sample_period = sample_period;
+    }
+
+    /* Bitfields */
+    attr.disabled       = disabled;
+    attr.inherit        = inherit;
+    attr.pinned         = pinned;
+    attr.exclusive      = exclusive;
+    attr.exclude_user   = exclude_user;
+    attr.exclude_kernel = exclude_kernel;
+    attr.exclude_hv     = exclude_hv;
+    attr.exclude_idle   = exclude_idle;
+    attr.mmap           = mmap;
+    attr.comm           = comm;
+    attr.freq           = freq;
+    attr.inherit_stat   = inherit_stat;
+    attr.enable_on_exec = enable_on_exec;
+    attr.task           = task;
+    attr.watermark      = watermark;
+    attr.precise_ip     = precise_ip;
+    attr.mmap_data      = mmap_data;
+    attr.sample_id_all  = sample_id_all;
+
+    self->attr = attr;
+
     return 0;
 }
 
-PyObject *event_ob__open(PyObject *self, PyObject *args)
+void event_ob__dealloc(PyPerfEvent *self)
 {
-    printf("event_ob__open\n");
-    Py_RETURN_NONE;
+    Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
-void event_ob__delete(PyPerfEvent *self)
-{
-    printf("event_ob__delete\n");
-}
+static PyMemberDef event_ob__members[] = {
+    { "type",   T_INT, offsetof(PyPerfEvent, attr.type), 0, "event type" },
+    { "config",  T_LONG, offsetof(PyPerfEvent, attr.config), 0, "event config"},
+    { NULL }  /* Sentinel */
+};
 
 static PyMethodDef event_ob__methods[] = {
-    {
-        .ml_name  = "open",
-        .ml_meth  = (PyCFunction)event_ob__open,
-        .ml_flags = METH_VARARGS | METH_KEYWORDS,
-        .ml_doc   = PyDoc_STR("open the sampling event")
-    },
     { .ml_name = NULL, }
 };
 
@@ -225,11 +309,83 @@ static char event_ob__doc[] = PyDoc_STR("sampling event object");
 
 PyTypeObject event_ob__type = {
     PyVarObject_HEAD_INIT(NULL, 0)
-    .tp_name    = "sampling.event",
+    .tp_name    = "sampling.Event",
     .tp_basicsize   = sizeof(struct event_ob),
-    .tp_dealloc = (destructor)event_ob__delete,
+    .tp_dealloc = (destructor)event_ob__dealloc,
     .tp_flags   = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
     .tp_doc     = event_ob__doc,
     .tp_methods = event_ob__methods,
+    .tp_members = event_ob__members,
     .tp_init    = (initproc)event_ob__init,
+};
+
+/*
+ * Sampling module
+ */
+
+PyObject *sampling__open(PyObject* self, PyObject* args)
+{
+    /* Open counter file descriptor */
+    /* sys_perf_event_open(attrs, pid, cpu, group_fd, flags); */
+    /* Configure fasync */
+    Py_RETURN_NONE;
+}
+
+PyObject *sampling__close(PyObject* self, PyObject* args)
+{
+    /* Close file descriptors */
+    Py_RETURN_NONE;
+}
+
+PyObject *sampling__enable(PyObject* self, PyObject* args)
+{
+    /* ioctl(fd, PERF_EVENT_IOC_ENABLE); */
+    Py_RETURN_NONE;
+}
+
+PyObject *sampling__disable(PyObject* self, PyObject* args)
+{
+    /* ioctl(fd, PERF_EVENT_IOC_DISABLE); */
+    Py_RETURN_NONE;
+}
+
+static PyMethodDef sampling__methods[] = {
+{
+        .ml_name = "open",
+        .ml_meth = sampling__open,
+        .ml_flags = METH_VARARGS | METH_KEYWORDS,
+        .ml_doc = PyDoc_STR("open events"),
+    },
+    {
+        .ml_name = "close",
+        .ml_meth = sampling__close,
+        .ml_flags = METH_VARARGS | METH_KEYWORDS,
+        .ml_doc = PyDoc_STR("close events"),
+    },
+    {
+        .ml_name = "enable",
+        .ml_meth = sampling__enable,
+        .ml_flags = METH_NOARGS,
+        .ml_doc = PyDoc_STR("enable events"),
+    },
+    {
+        .ml_name = "disable",
+        .ml_meth = sampling__disable,
+        .ml_flags = METH_NOARGS,
+        .ml_doc = PyDoc_STR("disable events"),
+    },
+    { .ml_name = NULL, }
+};
+
+
+PyModuleDef sampling__moduledef = {
+        PyModuleDef_HEAD_INIT,
+        "sampling",
+        NULL,
+        0,
+        sampling__methods,
+        NULL,
+        NULL,
+        NULL,
+        NULL
 };
