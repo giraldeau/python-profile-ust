@@ -12,7 +12,6 @@
 #include <pthread.h>
 #include <unistd.h>
 #include <signal.h>
-#include <linux/perf_event.h>
 #include <sys/syscall.h>
 #include <sys/types.h>
 #include <fcntl.h>
@@ -165,8 +164,6 @@ static void do_traceback_ust(PyFrameObject *frame)
     tracepoint(python, traceback, tsf, depth);
 }
 
-
-
 PyObject *
 traceback_ust(PyObject* self, PyObject* args)
 {
@@ -196,3 +193,43 @@ is_frame_utf8(PyObject* self, PyObject* args)
     }
     Py_RETURN_TRUE;
 }
+
+int event_ob__init(PyPerfEvent *self, PyObject *args, PyObject *kwds)
+{
+    printf("event_ob__init\n");
+    return 0;
+}
+
+PyObject *event_ob__open(PyObject *self, PyObject *args)
+{
+    printf("event_ob__open\n");
+    Py_RETURN_NONE;
+}
+
+void event_ob__delete(PyPerfEvent *self)
+{
+    printf("event_ob__delete\n");
+}
+
+static PyMethodDef event_ob__methods[] = {
+    {
+        .ml_name  = "open",
+        .ml_meth  = (PyCFunction)event_ob__open,
+        .ml_flags = METH_VARARGS | METH_KEYWORDS,
+        .ml_doc   = PyDoc_STR("open the sampling event")
+    },
+    { .ml_name = NULL, }
+};
+
+static char event_ob__doc[] = PyDoc_STR("sampling event object");
+
+PyTypeObject event_ob__type = {
+    PyVarObject_HEAD_INIT(NULL, 0)
+    .tp_name    = "sampling.event",
+    .tp_basicsize   = sizeof(struct event_ob),
+    .tp_dealloc = (destructor)event_ob__delete,
+    .tp_flags   = Py_TPFLAGS_DEFAULT|Py_TPFLAGS_BASETYPE,
+    .tp_doc     = event_ob__doc,
+    .tp_methods = event_ob__methods,
+    .tp_init    = (initproc)event_ob__init,
+};

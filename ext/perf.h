@@ -8,6 +8,8 @@
 #ifndef PERF_H_
 #define PERF_H_
 
+#include <linux/perf_event.h>
+
 struct perf_decl {
     const char *name;
     int     value;

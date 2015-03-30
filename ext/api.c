@@ -47,11 +47,6 @@ static struct PyModuleDef moduledef = {
  */
 
 /*
- * UST module
- */
-
-
-/*
  * Sampling module
  */
 
@@ -71,13 +66,11 @@ static struct PyModuleDef sampling__moduledef = {
         NULL
 };
 
-
 PyMODINIT_FUNC
 PyInit_api(void)
 {
     int i;
     PyObject *dict;
-    PyObject *proxy;
     PyObject *submod;
     PyObject *obj;
     PyObject *module = PyModule_Create(&moduledef);
@@ -90,6 +83,7 @@ PyInit_api(void)
 
     PyModule_AddObject(module, "sampling", (PyObject*)submod);
 
+    /* add const to the module */
     dict = PyModule_GetDict(submod);
     if (dict == NULL)
         goto error;
@@ -101,6 +95,14 @@ PyInit_api(void)
         PyDict_SetItemString(dict, perf__constants[i].name, obj);
         Py_DECREF(obj);
     }
+
+    /* event type */
+    event_ob__type.tp_new = PyType_GenericNew;
+    if (PyType_Ready(&event_ob__type) < 0)
+        goto error;
+
+    Py_INCREF(&event_ob__type);
+    PyModule_AddObject(submod, "Event", (PyObject *)&event_ob__type);
 
     return module;
 
