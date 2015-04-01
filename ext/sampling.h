@@ -10,6 +10,8 @@
 
 #include "perf.h"
 
+#define ACCESS_ONCE(x) (*(volatile typeof(x) *)&(x))
+
 struct frame {
 	char *co_filename;
 	char *co_name;
@@ -18,9 +20,23 @@ struct frame {
 	int lineno;
 };
 
+enum event_status {
+    EVENT_STATUS_OPENED = 42,
+    EVENT_STATUS_CLOSED,
+    EVENT_STATUS_FAILED,
+};
+
+struct event_status_decl {
+    char *name;
+    int value;
+};
+extern struct event_status_decl event_status__constants[];
+
 typedef struct event_ob {
     PyObject_HEAD;
     struct perf_event_attr attr;
+    int fd;
+    enum event_status status;
 } PyPerfEvent;
 
 extern PyTypeObject event_ob__type;

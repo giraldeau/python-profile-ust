@@ -76,6 +76,14 @@ PyInit_api(void)
         Py_DECREF(obj);
     }
 
+    for (i = 0; event_status__constants[i].name != NULL; i++) {
+        obj = PyLong_FromLong(event_status__constants[i].value);
+        if (obj == NULL)
+            goto error;
+        PyDict_SetItemString(dict, event_status__constants[i].name, obj);
+        Py_DECREF(obj);
+    }
+
     /* event type */
     event_ob__type.tp_new = PyType_GenericNew;
     if (PyType_Ready(&event_ob__type) < 0)

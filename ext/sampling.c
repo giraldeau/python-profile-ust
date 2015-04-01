@@ -4,18 +4,24 @@
  *  Created on: Jan 15, 2015
  *      Author: francis
  */
+
+#define _GNU_SOURCE
 #include <Python.h>
-#include <frameobject.h>
-#include <unicodeobject.h>
 #include <bytesobject.h>
+#include <frameobject.h>
+#include <listobject.h>
 #include <structmember.h>
-#include <string.h>
+#include <unicodeobject.h>
+
+#include <fcntl.h>
 #include <pthread.h>
-#include <unistd.h>
 #include <signal.h>
+#include <string.h>
+#include <stropts.h>
+#include <unistd.h>
+
 #include <sys/syscall.h>
 #include <sys/types.h>
-#include <fcntl.h>
 
 #include "tp.h"
 #include "sampling.h"
@@ -45,8 +51,11 @@ static inline PyFrameObject *get_top_frame(void);
  * Signal handler
  */
 
-static void handle_signal(void *data)
+static int hits = 0;
+
+static void handle_sigio(int signo, siginfo_t *info, void *data)
 {
+    ACCESS_ONCE(hits) = hits + 1;
     do_traceback_ust(get_top_frame());
 }
 
@@ -191,7 +200,9 @@ is_frame_utf8(PyObject* self, PyObject* args)
 
 int event_ob__init(PyPerfEvent *self, PyObject *args, PyObject *kwargs)
 {
-    struct perf_event_attr attr;
+    struct perf_event_attr attr = {
+        .size = sizeof(struct perf_event_attr),
+    };
     static char *kwlist[] = {
             "type",
             "config",
@@ -260,8 +271,10 @@ int event_ob__init(PyPerfEvent *self, PyObject *args, PyObject *kwargs)
 
     /* union... */
     if (sample_period != 0) {
-        if (attr.sample_freq != 0)
-            return -1; /* FIXME: throw right exception */
+        if (attr.sample_freq != 0) {
+            PyErr_SetString(PyExc_AttributeError, "Event frequency or period required");
+            return -1;
+        }
         attr.sample_period = sample_period;
     }
 
@@ -286,6 +299,8 @@ int event_ob__init(PyPerfEvent *self, PyObject *args, PyObject *kwargs)
     attr.sample_id_all  = sample_id_all;
 
     self->attr = attr;
+    self->status = EVENT_STATUS_CLOSED;
+    self->fd = -1;
 
     return 0;
 }
@@ -295,13 +310,33 @@ void event_ob__dealloc(PyPerfEvent *self)
     Py_TYPE(self)->tp_free((PyObject*)self);
 }
 
+PyObject *event_ob__read(PyPerfEvent* self, PyObject* args)
+{
+    uint64_t val = 0;
+    if (self->status == EVENT_STATUS_OPENED) {
+        if (read(self->fd, &val, sizeof(val)) < 0) {
+            PyErr_SetString(PyExc_IOError, "failed to read perf event counter");
+            return NULL;
+        }
+    }
+    return Py_BuildValue("K", val);
+}
+
 static PyMemberDef event_ob__members[] = {
-    { "type",   T_INT, offsetof(PyPerfEvent, attr.type), 0, "event type" },
-    { "config",  T_LONG, offsetof(PyPerfEvent, attr.config), 0, "event config"},
+    { "type",   T_INT,  offsetof(PyPerfEvent, attr.type),   0, "event type" },
+    { "config", T_LONG, offsetof(PyPerfEvent, attr.config), 0, "event config"},
+    { "status", T_INT,  offsetof(PyPerfEvent, status),      0, "event status"},
+    { "fd",     T_INT,  offsetof(PyPerfEvent, fd),          0, "event file descriptor"},
     { NULL }  /* Sentinel */
 };
 
 static PyMethodDef event_ob__methods[] = {
+    {
+        .ml_name = "read",
+        .ml_meth = (PyCFunction)event_ob__read,
+        .ml_flags = METH_NOARGS,
+        .ml_doc = PyDoc_STR("read counter value"),
+    },
     { .ml_name = NULL, }
 };
 
@@ -319,34 +354,219 @@ PyTypeObject event_ob__type = {
     .tp_init    = (initproc)event_ob__init,
 };
 
+#define PyPerfEvent_CheckExact(op) (Py_TYPE(op) == &event_ob__type)
+
 /*
  * Sampling module
  */
 
+struct event_status_decl event_status__constants[] = {
+    { "EVENT_STATUS_OPENED", EVENT_STATUS_OPENED },
+    { "EVENT_STATUS_CLOSED", EVENT_STATUS_CLOSED },
+    { "EVENT_STATUS_FAILED", EVENT_STATUS_FAILED },
+    { .name = NULL },
+};
+
+static PyObject *evseq;
+
+static pid_t gettid(void)
+{
+    return syscall(SYS_gettid);
+}
+
+static long sys_perf_event_open(struct perf_event_attr *attr,
+                    pid_t pid, int cpu, int group_fd,
+                    unsigned long flags)
+{
+  return syscall(__NR_perf_event_open, attr, pid, cpu,
+                 group_fd, flags);
+}
+
+static int sampling_do_close(PyObject *obj)
+{
+    PyPerfEvent *ev;
+    if (!PyPerfEvent_CheckExact(obj))
+        return -1;
+    ev = (PyPerfEvent *)obj;
+    if (ev->status == EVENT_STATUS_OPENED) {
+        close(ev->fd);
+        ev->status = EVENT_STATUS_CLOSED;
+    }
+    return 0;
+}
+
+static int sampling_do_open(PyObject *obj)
+{
+    int tid;
+    int flags;
+    PyPerfEvent *ev;
+    struct f_owner_ex fown;
+    struct perf_event_attr attr;
+
+    if (!PyPerfEvent_CheckExact(obj))
+        return -1;
+    ev = (PyPerfEvent *)obj;
+    tid = gettid();
+
+    /* Open the perf event */
+    attr = ev->attr;
+    attr.disabled = 0; /* do not start the event yet */
+    ev->fd = sys_perf_event_open(&attr, gettid(), -1, -1, 0);
+    if (ev->fd < 0) {
+        ev->status = EVENT_STATUS_FAILED;
+        return -1;
+    }
+
+    /* Configure fasync */
+    fown.type = F_OWNER_TID;
+    fown.pid = tid;
+    if (fcntl(ev->fd, F_SETOWN_EX, &fown) < 0)
+        goto fail;
+
+    flags = fcntl(ev->fd, F_GETFL);
+    if (fcntl(ev->fd, F_SETFL, flags | FASYNC | O_ASYNC) < 0)
+        goto fail;
+
+    ev->status = EVENT_STATUS_OPENED;
+    return 0;
+
+fail:
+    close(ev->fd);
+    ev->fd = -1;
+    ev->status = EVENT_STATUS_FAILED;
+    PyErr_SetString(PyExc_RuntimeError, "fcntl() failed");
+    return -1;
+}
+
+static int sampling_setup_sighandler(void *action, int check)
+{
+    struct sigaction sigact, oldsigact;
+    sigset_t set;
+
+    /* check if the signal is blocked */
+    if (check) {
+        sigemptyset(&set);
+        pthread_sigmask(SIG_BLOCK, NULL, &set);
+        if (sigismember(&set, SIGIO)) {
+            PyErr_SetString(PyExc_RuntimeError, "signal SIGIO is blocked");
+            return -1;
+        }
+    }
+
+    /* install handler */
+    sigact.sa_sigaction = action;
+    sigact.sa_flags = SA_SIGINFO;
+    if (sigaction(SIGIO, &sigact, &oldsigact) < 0) {
+        PyErr_SetString(PyExc_RuntimeError, "sigaction() failed");
+        return -1;
+    }
+    if (check && !(oldsigact.sa_sigaction == (void *)SIG_DFL ||
+            oldsigact.sa_sigaction == (void *)SIG_IGN)) {
+        PyErr_Warn(PyExc_RuntimeWarning, "perf sampling overwrites SIGIO handler");
+    }
+    return 0;
+}
+
+PyObject *sampling__close(PyObject* self, PyObject* args);
+
 PyObject *sampling__open(PyObject* self, PyObject* args)
 {
-    /* Open counter file descriptor */
-    /* sys_perf_event_open(attrs, pid, cpu, group_fd, flags); */
-    /* Configure fasync */
+    int i;
+    int len;
+    PyObject *obj = NULL;
+    PyObject *seq = NULL;
+
+
+    if (!PyArg_ParseTuple(args, "O:events", &obj))
+        Py_RETURN_NONE;
+
+    if (PyPerfEvent_CheckExact(obj)) {
+        obj = PyTuple_Pack(1, obj);
+    } else {
+        Py_INCREF(obj);
+    }
+    if (!(seq = PySequence_Fast(obj, "expected a sequence")))
+        return NULL;
+
+    sampling__close(self, NULL);
+
+    if (sampling_setup_sighandler(handle_sigio, 1) < 0)
+        return NULL;
+
+    len = PySequence_Size(obj);
+    for (i = 0; i < len; i++) {
+        PyObject *ev = PySequence_Fast_GET_ITEM(seq, i);
+        sampling_do_open(ev);
+    }
+    Py_DECREF(seq);
+    assert(seq->ob_refcnt > 0);
+    evseq = seq;
+    __sync_synchronize();
+
     Py_RETURN_NONE;
 }
 
 PyObject *sampling__close(PyObject* self, PyObject* args)
 {
-    /* Close file descriptors */
+    int i;
+    int len;
+    PyObject *ev;
+
+    if (!evseq)
+        Py_RETURN_NONE;
+    len = PySequence_Size(evseq);
+    for (i = 0; i < len; i++) {
+        ev = PySequence_Fast_GET_ITEM(evseq, i);
+        sampling_do_close(ev);
+    }
+    sampling_setup_sighandler(SIG_DFL, 0);
+    Py_DECREF(evseq);
+    evseq = NULL;
     Py_RETURN_NONE;
+}
+
+int sampling__change_state(int op)
+{
+    int i;
+    int len;
+    PyObject *obj;
+
+    if (!evseq)
+        return 0;
+    if (op != PERF_EVENT_IOC_ENABLE && op != PERF_EVENT_IOC_DISABLE) {
+        PyErr_SetString(PyExc_RuntimeError, "Unkown ioctl");
+        return -1;
+    }
+    len = PySequence_Size(evseq);
+    for (i = 0; i < len; i++) {
+        obj = PySequence_Fast_GET_ITEM(evseq, i);
+        if (PyPerfEvent_CheckExact(obj)) {
+            PyPerfEvent *ev = (PyPerfEvent *)obj;
+            if (ev->status == EVENT_STATUS_OPENED) {
+                ioctl(ev->fd, op, 0);
+            }
+        }
+    }
+    return 0;
 }
 
 PyObject *sampling__enable(PyObject* self, PyObject* args)
 {
-    /* ioctl(fd, PERF_EVENT_IOC_ENABLE); */
+    if (sampling__change_state(PERF_EVENT_IOC_ENABLE) < 0)
+        return NULL;
     Py_RETURN_NONE;
 }
 
 PyObject *sampling__disable(PyObject* self, PyObject* args)
 {
-    /* ioctl(fd, PERF_EVENT_IOC_DISABLE); */
+    if (sampling__change_state(PERF_EVENT_IOC_DISABLE) < 0)
+        return NULL;
     Py_RETURN_NONE;
+}
+
+PyObject *sampling__hits(PyObject* self, PyObject* args)
+{
+    return Py_BuildValue("i", hits);
 }
 
 static PyMethodDef sampling__methods[] = {
@@ -373,6 +593,12 @@ static PyMethodDef sampling__methods[] = {
         .ml_meth = sampling__disable,
         .ml_flags = METH_NOARGS,
         .ml_doc = PyDoc_STR("disable events"),
+    },
+    {
+        .ml_name = "hits",
+        .ml_meth = sampling__hits,
+        .ml_flags = METH_NOARGS,
+        .ml_doc = PyDoc_STR("signal handler hits"),
     },
     { .ml_name = NULL, }
 };
