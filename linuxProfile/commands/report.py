@@ -2,6 +2,7 @@ import argparse
 import sys
 from linuxProfile.commands.base import BaseCommand
 from linuxProfile.tools import load_trace, build_profile, CalltreeReport, ProfileTree
+from linuxProfile.utils import ProgressBar
 
 class ReportCommand(BaseCommand):
     def __init__(self):
@@ -13,8 +14,9 @@ class ReportCommand(BaseCommand):
     def handle(self, args):
         trace = load_trace(args.path)
 
+        bar = ProgressBar()
         root = ProfileTree("root")
-        build_profile(trace, root)
+        build_profile(trace, root, bar)
 
         report = CalltreeReport()
         report.write(sys.stdout, root)

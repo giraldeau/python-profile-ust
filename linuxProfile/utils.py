@@ -2,6 +2,8 @@ from linuxProfile import api
 from functools import total_ordering
 import resource
 import mmap
+import math
+import sys
 
 @total_ordering
 class Timespec(object):
@@ -38,3 +40,40 @@ def do_page_faults(n=0):
         for i in range(n):
             mm.seek(i * pg);
             mm.write(b'x')
+
+class ProgressBar(object):
+    def __init__(self, total_work=1, width=40):
+
+        self._width = width
+        self._state = 0
+
+    @property
+    def total_work(self):
+        return self._total_work
+
+    @total_work.setter
+    def total_work(self, work):
+        self._total_work = float(work)
+
+    def update(self, current):
+        bar = int(math.ceil((current / self._total_work) * self._width))
+        if (bar == self._state):
+            return
+        space = self._width - bar
+        sys.stdout.write("[{}{}]\r".format("#" * bar, " " * space))
+        sys.stdout.flush()
+        self._state = bar
+
+    def done(self):
+        sys.stdout.write("\ndone\n")
+        sys.stdout.flush()
+
+class NullProgressBar(ProgressBar):
+    def __init__(self, total_work=1, width=40):
+        super().__init__(total_work, width)
+
+    def update(self, current):
+        pass
+
+    def done(self):
+        pass
