@@ -42,8 +42,3 @@ def test_hits():
     assert(ev.read() >= n)
     assert(sampling.hits() >= n)
     assert_equals(ev.read(), sampling.hits(), "read and hits values must be equals")
-
-"""
-class Event(object):
-    attr
-"""

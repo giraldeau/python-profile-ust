@@ -33,7 +33,7 @@ static struct PyModuleDef moduledef = {
         "api",
         NULL,
         0,
-        NULL,
+        PythonProfileLttngMethods,
         NULL,
         NULL,
         NULL,
