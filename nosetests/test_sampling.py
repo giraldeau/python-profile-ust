@@ -1,5 +1,6 @@
 from linuxProfile.api import sampling
 from linuxProfile import perf
+from linuxProfile.utils import do_page_faults
 from nose.tools import assert_equals
 import sys
 
@@ -29,16 +30,18 @@ def test_open():
     sampling.close()
 
 def test_hits():
+    n = 100
     ev = sampling.Event(type=sampling.TYPE_SOFTWARE,
                         config=sampling.COUNT_SW_PAGE_FAULTS,
-                        sample_period = 1)
+                        sample_period=1,
+                        freq=0)
     sampling.open(ev)
     sampling.enable()
     assert_equals(ev.status, sampling.EVENT_STATUS_OPENED)
-    x = [x for x in range(100)]
-    assert(ev.read() > 0)
-    assert(sampling.hits() > 0)
-    assert_equals(ev.read(), sampling.hits(), "hits and read value should be equals")
+    do_page_faults(n)
+    assert(ev.read() >= n)
+    assert(sampling.hits() >= n)
+    assert_equals(ev.read(), sampling.hits(), "read and hits values must be equals")
 
 """
 class Event(object):

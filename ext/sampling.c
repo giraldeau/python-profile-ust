@@ -272,7 +272,11 @@ int event_ob__init(PyPerfEvent *self, PyObject *args, PyObject *kwargs)
     /* union... */
     if (sample_period != 0) {
         if (attr.sample_freq != 0) {
-            PyErr_SetString(PyExc_AttributeError, "Event frequency or period required");
+            PyErr_SetString(PyExc_AttributeError, "Event frequency or period required, not both");
+            return -1;
+        }
+        if (freq != 0) {
+            PyErr_SetString(PyExc_AttributeError, "sample_period set requires freq equal to zero");
             return -1;
         }
         attr.sample_period = sample_period;
@@ -411,7 +415,7 @@ static int sampling_do_open(PyObject *obj)
     /* Open the perf event */
     attr = ev->attr;
     attr.disabled = 0; /* do not start the event yet */
-    ev->fd = sys_perf_event_open(&attr, gettid(), -1, -1, 0);
+    ev->fd = sys_perf_event_open(&attr, tid, -1, -1, 0);
     if (ev->fd < 0) {
         ev->status = EVENT_STATUS_FAILED;
         return -1;
@@ -428,6 +432,7 @@ static int sampling_do_open(PyObject *obj)
         goto fail;
 
     ev->status = EVENT_STATUS_OPENED;
+
     return 0;
 
 fail:

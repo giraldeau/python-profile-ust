@@ -1,14 +1,16 @@
 from linuxProfile import api
 from functools import total_ordering
+import resource
+import mmap
 
 @total_ordering
 class Timespec(object):
     NSEC_PER_SEC = 1000000000
-    def __init__(self, tv_sec = 0, tv_nsec = 0):
+    def __init__(self, tv_sec=0, tv_nsec=0):
         self.tv_sec = tv_sec
         self.tv_nsec = tv_nsec
     def sub(self, other):
-        tv_sec  = self.tv_sec  - other.tv_sec;
+        tv_sec = self.tv_sec - other.tv_sec;
         tv_nsec = self.tv_nsec - other.tv_nsec;
         if (self.tv_nsec < other.tv_nsec):
             tv_sec -= 1
@@ -29,3 +31,10 @@ class Timespec(object):
 
 def clock_gettime_timespec():
     return Timespec(*api.clock_gettime())
+
+def do_page_faults(n=0):
+    pg = resource.getpagesize()
+    with mmap.mmap(-1, n * pg) as mm:
+        for i in range(n):
+            mm.seek(i * pg);
+            mm.write(b'x')
