@@ -166,7 +166,8 @@ def build_profile(trace, root, bar=None):
     if bar is None:
         bar = NullProgressBar()
     handler = PythonTracebackEventHandler(root)
-    bar.total_work = trace.size
+    if (hasattr(trace, "size")):
+        bar.total_work = trace.size
     x = 0
     for event in trace.events:
         handler.handle(event)
