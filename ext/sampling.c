@@ -20,8 +20,11 @@
 #include <stropts.h>
 #include <unistd.h>
 
+#include <sys/select.h>
 #include <sys/syscall.h>
+#include <sys/time.h>
 #include <sys/types.h>
+
 
 #include "tp.h"
 #include "sampling.h"
@@ -53,8 +56,26 @@ static inline PyFrameObject *get_top_frame(void);
 
 static int hits = 0;
 
+PyPerfEvent *xev = NULL;
+
 static void handle_sigio(int signo, siginfo_t *info, void *data)
 {
+    //info->_sifields._sigpoll.si_band;
+    /*
+    printf("sigio code=%d band=%lu fd=%d\n",
+            info->si_code,
+            info->si_band,
+            info->si_fd);
+    */
+    if (xev) {
+        struct timeval ts = { 0, 0 };
+        fd_set rfds;
+        int ret;
+        FD_ZERO(&rfds);
+        FD_SET(xev->fd, &rfds);
+        ret = select(1, &rfds, NULL, NULL, &ts);
+        printf("ret=%d\n", ret);
+    }
     ACCESS_ONCE(hits) = hits + 1;
     do_traceback_ust(get_top_frame());
 }
@@ -432,7 +453,7 @@ static int sampling_do_open(PyObject *obj)
         goto fail;
 
     ev->status = EVENT_STATUS_OPENED;
-
+    xev = ev;
     return 0;
 
 fail:
