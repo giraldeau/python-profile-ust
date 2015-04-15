@@ -60,13 +60,7 @@ PyPerfEvent *xev = NULL;
 
 static void handle_sigio(int signo, siginfo_t *info, void *data)
 {
-    //info->_sifields._sigpoll.si_band;
     /*
-    printf("sigio code=%d band=%lu fd=%d\n",
-            info->si_code,
-            info->si_band,
-            info->si_fd);
-    */
     if (xev) {
         struct timeval ts = { 0, 0 };
         fd_set rfds;
@@ -76,8 +70,12 @@ static void handle_sigio(int signo, siginfo_t *info, void *data)
         ret = select(1, &rfds, NULL, NULL, &ts);
         printf("ret=%d\n", ret);
     }
+    */
     ACCESS_ONCE(hits) = hits + 1;
     do_traceback_ust(get_top_frame());
+    if (xev) {
+        ioctl(xev->fd, PERF_EVENT_IOC_REFRESH, 1);
+    }
 }
 
 /*
@@ -436,6 +434,8 @@ static int sampling_do_open(PyObject *obj)
     /* Open the perf event */
     attr = ev->attr;
     attr.disabled = 0; /* do not start the event yet */
+    attr.watermark = 1;
+    attr.wakeup_events = 1;
     ev->fd = sys_perf_event_open(&attr, tid, -1, -1, 0);
     if (ev->fd < 0) {
         ev->status = EVENT_STATUS_FAILED;
@@ -454,6 +454,9 @@ static int sampling_do_open(PyObject *obj)
 
     ev->status = EVENT_STATUS_OPENED;
     xev = ev;
+    __sync_synchronize();
+    ioctl(xev->fd, PERF_EVENT_IOC_REFRESH, 1);
+    ioctl(xev->fd, PERF_EVENT_IOC_ENABLE, 0);
     return 0;
 
 fail:
@@ -519,6 +522,9 @@ PyObject *sampling__open(PyObject* self, PyObject* args)
     if (sampling_setup_sighandler(handle_sigio, 1) < 0)
         return NULL;
 
+    /*
+     * FIXME: use the first fd as the group_fd, control tracing with it.
+     */
     len = PySequence_Size(obj);
     for (i = 0; i < len; i++) {
         PyObject *ev = PySequence_Fast_GET_ITEM(seq, i);
