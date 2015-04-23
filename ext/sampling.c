@@ -60,17 +60,6 @@ PyPerfEvent *xev = NULL;
 
 static void handle_sigio(int signo, siginfo_t *info, void *data)
 {
-    /*
-    if (xev) {
-        struct timeval ts = { 0, 0 };
-        fd_set rfds;
-        int ret;
-        FD_ZERO(&rfds);
-        FD_SET(xev->fd, &rfds);
-        ret = select(1, &rfds, NULL, NULL, &ts);
-        printf("ret=%d\n", ret);
-    }
-    */
     ACCESS_ONCE(hits) = hits + 1;
     do_traceback_ust(get_top_frame());
     if (xev) {
