@@ -43,7 +43,7 @@ def do_page_faults(n=0):
 
 class ProgressBar(object):
     def __init__(self, total_work=1, width=40):
-
+        self._total_work = total_work
         self._width = width
         self._state = 0
 

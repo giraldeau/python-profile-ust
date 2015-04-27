@@ -25,6 +25,8 @@
 #include <sys/time.h>
 #include <sys/types.h>
 
+#define UNW_LOCAL_ONLY
+#include <libunwind.h>
 
 #include "tp.h"
 #include "sampling.h"
@@ -152,7 +154,10 @@ populate_utf8(PyObject *unicode, char **str, size_t *len)
 
 static void do_traceback_ust(PyFrameObject *frame)
 {
+    void *addr[DEPTH_MAX];
+    size_t unw_depth = 0;
     size_t depth = 0;
+
     while (frame != NULL && depth < DEPTH_MAX) {
         if (!(PyFrame_Check(frame) &&
               frame->f_code != NULL && PyCode_Check(frame->f_code) &&
@@ -169,7 +174,9 @@ static void do_traceback_ust(PyFrameObject *frame)
         frame = frame->f_back;
         depth++;
     }
-    tracepoint(python, traceback, tsf, depth);
+    unw_depth = unw_backtrace((void **)&addr, DEPTH_MAX);
+    assert(depth <= DEPTH_MAX);
+    tracepoint(python, traceback, addr, unw_depth, tsf, depth);
 }
 
 PyObject *
