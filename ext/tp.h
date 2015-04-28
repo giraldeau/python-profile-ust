@@ -79,6 +79,20 @@ TRACEPOINT_STRUCT(python, frame,
 )
 
 TRACEPOINT_EVENT(python, traceback,
+    TP_ARGS(struct frame *, framevar, size_t, frame_depth),
+    TP_FIELDS(
+            ctf_sequence_of_struct(python, frame, frames, framevar, size_t, frame_depth)
+    )
+)
+
+TRACEPOINT_EVENT(python, unwind,
+    TP_ARGS(void *, addr, size_t, unw_depth),
+    TP_FIELDS(
+            ctf_sequence(void *, addr, addr, size_t, unw_depth)
+    )
+)
+
+TRACEPOINT_EVENT(python, traceback_full,
     TP_ARGS(void *, addr, size_t, unw_depth, struct frame *, framevar, size_t, frame_depth),
     TP_FIELDS(
             ctf_sequence(void *, addr, addr, size_t, unw_depth)

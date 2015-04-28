@@ -9,7 +9,9 @@ class Foo(object):
     def bar(self):
         self.baz()
     def baz(self):
-        api.traceback_ust()
+        api.unwind()
+        api.traceback()
+        api.traceback_full()
 
 def test_traceback_ust():
     foo = Foo()

@@ -44,7 +44,9 @@ extern PyModuleDef sampling__moduledef;
 
 extern PyObject* enable_perf(PyObject* self, PyObject* args);
 extern PyObject* disable_perf(PyObject* self, PyObject* args);
-extern PyObject* traceback_ust(PyObject* self, PyObject *args);
+extern PyObject* do_traceback(PyObject* self, PyObject *args);
+extern PyObject* do_unwind(PyObject* self, PyObject *args);
+extern PyObject* do_traceback_full(PyObject* self, PyObject *args);
 extern PyObject* is_frame_utf8(PyObject* self, PyObject *args);
 
 #endif /* SAMPLING_H_ */

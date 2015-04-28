@@ -33,7 +33,6 @@
 #include "encode.h"
 
 #define DEPTH_MAX 100
-static struct frame tsf[DEPTH_MAX];
 
 /*
  * We don't use TLS here, seems to possible to access a thread data from
@@ -49,7 +48,7 @@ static int gen;
 static int ref = 0;
 
 /* forward definition for handle_signal */
-static void do_traceback_ust(PyFrameObject *frame);
+static void traceback_full(PyFrameObject *frame);
 static inline PyFrameObject *get_top_frame(void);
 
 /*
@@ -63,7 +62,7 @@ PyPerfEvent *xev = NULL;
 static void handle_sigio(int signo, siginfo_t *info, void *data)
 {
     ACCESS_ONCE(hits) = hits + 1;
-    do_traceback_ust(get_top_frame());
+    traceback_full(get_top_frame());
     if (xev) {
         ioctl(xev->fd, PERF_EVENT_IOC_REFRESH, 1);
     }
@@ -152,13 +151,10 @@ populate_utf8(PyObject *unicode, char **str, size_t *len)
     *len = PyUnicode_UTF8_LENGTH(unicode);
 }
 
-static void do_traceback_ust(PyFrameObject *frame)
+static size_t __do_traceback(PyFrameObject *frame, struct frame *tsf, int max)
 {
-    void *addr[DEPTH_MAX];
-    size_t unw_depth = 0;
     size_t depth = 0;
-
-    while (frame != NULL && depth < DEPTH_MAX) {
+    while (frame != NULL && depth < max) {
         if (!(PyFrame_Check(frame) &&
               frame->f_code != NULL && PyCode_Check(frame->f_code) &&
               frame->f_code->co_filename != NULL && PyUnicode_Check(frame->f_code->co_filename) &&
@@ -174,15 +170,50 @@ static void do_traceback_ust(PyFrameObject *frame)
         frame = frame->f_back;
         depth++;
     }
-    unw_depth = unw_backtrace((void **)&addr, DEPTH_MAX);
+    return depth;
+}
+
+static void traceback_full(PyFrameObject *frame)
+{
+    void *addr[DEPTH_MAX];
+    struct frame tsf[DEPTH_MAX];
+    size_t unw_depth = 0;
+    size_t depth = 0;
+
+    depth = __do_traceback(frame, tsf, DEPTH_MAX);
     assert(depth <= DEPTH_MAX);
-    tracepoint(python, traceback, addr, unw_depth, tsf, depth);
+    unw_depth = unw_backtrace(addr, DEPTH_MAX);
+    assert(unw_depth <= DEPTH_MAX);
+    tracepoint(python, traceback_full, addr, unw_depth, tsf, depth);
 }
 
 PyObject *
-traceback_ust(PyObject* self, PyObject* args)
+do_traceback(PyObject* self, PyObject* args)
 {
-    do_traceback_ust(PyEval_GetFrame());
+    struct frame tsf[DEPTH_MAX];
+    size_t depth = 0;
+
+    depth = __do_traceback(PyEval_GetFrame(), tsf, DEPTH_MAX);
+    tracepoint(python, traceback, tsf, depth);
+    Py_RETURN_NONE;
+}
+
+PyObject *
+do_unwind(PyObject* self, PyObject* args)
+{
+    void *addr[DEPTH_MAX];
+    size_t unw_depth = 0;
+
+    unw_depth = unw_backtrace((void **)&addr, DEPTH_MAX);
+    assert(unw_depth <= DEPTH_MAX);
+    tracepoint(python, unwind, addr, unw_depth);
+    Py_RETURN_NONE;
+}
+
+PyObject *
+do_traceback_full(PyObject* self, PyObject* args)
+{
+    traceback_full(PyEval_GetFrame());
     Py_RETURN_NONE;
 }
 
