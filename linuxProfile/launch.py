@@ -2,7 +2,7 @@ import argparse
 import sys
 import os
 
-from linuxProfile.api import enable_perf, disable_perf, enable_ust, disable_ust, sampling 
+from linuxProfile.api import enable_perf, disable_perf, enable_ust, disable_ust, sampling
 
 '''
 Launcher for LTTng-UST
@@ -66,12 +66,12 @@ def run(prof):
         run_command(prof, args.remainder)
     except Exception as e:
         parser.print_usage()
+        sys.exit(1)
 
 def run_command(prof, com):
     if len(com) > 0:
         sys.argv = com
         progname = com[0]
-        #sys.path.insert(0, os.path.dirname(progname))
         # find in sys.path for the progname
         if not os.path.isfile(progname):
             for p in sys.path:

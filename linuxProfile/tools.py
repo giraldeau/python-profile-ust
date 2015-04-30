@@ -5,6 +5,11 @@ import babeltrace
 import os
 from operator import attrgetter
 from linuxProfile.utils import NullProgressBar
+from collections import namedtuple
+import math
+
+class StatItem(namedtuple("StatItem", "path total value children_sum")):
+    pass
 
 class ProfileTree(object):
     def __init__(self, key=None):
@@ -120,10 +125,15 @@ class ProfileTree(object):
         if isinstance(path, str):
             items = path.strip("/").split("/")
         node = self
-        for item in items:
-            node = node.get_child(item)
-            if node == None:
+        if len(items) == 0:
+            return None
+        if len(items) == 1:
+            return node
+        for item in items[1:]:
+            temp = node.get_child(item)
+            if temp == None:
                 break
+            node = temp
         return node
 
     def __repr__(self):
@@ -137,7 +147,8 @@ class PythonTracebackEventHandler(object):
         self.count = 0
 
     def handle(self, event):
-        if event.name != "python:traceback":
+        if (event.name != "python:traceback" and
+            event.name != "python:traceback_full"):
             return
         frames = event.get("frames", [])
         frames.reverse()
@@ -150,6 +161,7 @@ class PythonTracebackEventHandler(object):
 
 # The number of events and the timestamp_end are unkown
 # approximation for the progress bar using trace size and event size
+# And it is shitty
 BYTES_PER_EVENT = 400
 
 def getFolderSize(folder):
@@ -174,6 +186,37 @@ def build_profile(trace, root, bar=None):
         x += BYTES_PER_EVENT
         bar.update(x)
     bar.done()
+    return handler
+
+def make_list_gen(lst):
+    def list_gen():
+        for item in lst:
+            yield item
+    return list_gen
+
+def make_path_stats(gen):
+    res = []
+    for node, depth in gen():
+        path = "/" + "/".join([x.key for x in node.path])
+        item = (path, node.total, node.value, node.children_sum)
+        res.append(item)
+    return res
+
+def profile_rms_error(stats, root):
+    root_total = float(root.total)
+    stat_total = 0.0
+    for stat in stats:
+        stat_total += float(stat.value)
+    rms = 0.0
+    for stat in stats:
+        node = root.query(stat.path)
+        assert(node != None)
+        p1 = node.value / root_total
+        p2 = stat.value / stat_total
+        err = p1 - p2
+        rms += err * err
+    rms = math.sqrt(rms)
+    return rms
 
 def find(dir, fname):
     for parent, dirs, files in os.walk(dir):
@@ -186,6 +229,8 @@ def load_trace(paths):
     trace = babeltrace.TraceCollection()
     trace.size = 0
     for path in paths:
+        if not os.path.isdir(path):
+                raise IOError("Path is not a directory")
         for dir in find(path, "metadata"):
             ret = trace.add_trace(dir, "ctf")
             if ret == None:

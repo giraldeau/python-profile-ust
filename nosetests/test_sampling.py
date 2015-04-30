@@ -1,5 +1,5 @@
 from linuxProfile.api import sampling
-from linuxProfile import perf
+from linuxProfile.launch import ProfileRunnerPerfSampling
 from linuxProfile.utils import do_page_faults
 from nose.tools import assert_equals
 import sys
@@ -10,7 +10,7 @@ def test_import_sampling():
     assert_equals(sampling.TYPE_HARDWARE, 0)
 
 def test_create_event():
-    type, config = perf.SW_CPU_CLOCK
+    type, config = ProfileRunnerPerfSampling.evdefs['cycles']
     ev = sampling.Event(type=type, config=config);
     assert_equals(ev.type, type)
     assert_equals(ev.config, config)
@@ -23,7 +23,7 @@ def test_methods():
     sampling.disable()
 
 def test_open():
-    type, config = perf.SW_CPU_CLOCK
+    type, config = ProfileRunnerPerfSampling.evdefs['cycles']
     ev = sampling.Event(type=type, config=config)
     sampling.open(ev)
     assert_equals(ev.status, sampling.EVENT_STATUS_OPENED);

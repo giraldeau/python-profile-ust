@@ -1,6 +1,5 @@
-from linuxProfile.tools import ProfileTree, CalltreeReport, PythonTracebackEventHandler, build_profile
+from linuxProfile.tools import ProfileTree, CalltreeReport, PythonTracebackEventHandler, StatItem, build_profile, make_path_stats, profile_rms_error, make_list_gen
 import sys  # temp
-from collections import namedtuple
 
 class StubTrace(dict):
     pass
@@ -15,22 +14,11 @@ class StubFrame(dict):
         self["co_filename"] = co_filename
         self["lineno"] = lineno
 
-class StubStat(namedtuple("StubStat", "path total value children_sum")):
-    pass
-
 def test_print():
     assert("(42: 0)" == str(ProfileTree(42)))
 
 def make_key_depth(gen):
     return list((node.key, depth) for node, depth in gen())
-
-def make_path_stats(gen):
-    res = []
-    for node, depth in gen():
-        path = "/" + "/".join([x.key for x in node.path])
-        item = (path, node.total, node.value, node.children_sum)
-        res.append(item)
-    return res
 
 def check_profile(root, stats):
     for stat in stats:
@@ -91,10 +79,15 @@ def test_profile():
     act = make_path_stats(root.preorder)
     check_list(exp, act)
 
+    items = []
+    for e in exp:
+       items.append(StatItem(e[0], e[1], e[2], e[3]))
+    rms = profile_rms_error(items, root)
+    assert(rms < 0.0000001)
+
 def yaml_trace(yam):
     with open(yam) as f:
         trace = yaml.load(f)
-        print(trace)
         for event in trace['events']:
             yield event
 
@@ -111,7 +104,7 @@ traces = {
 }
 
 exp_stats = {
-    "basic": [StubStat("/foo", 2, 0, 2),
+    "basic": [StatItem("/foo", 2, 0, 2),
              ]
 }
 
