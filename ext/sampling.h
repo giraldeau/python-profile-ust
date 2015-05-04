@@ -26,6 +26,12 @@ enum event_status {
     EVENT_STATUS_FAILED,
 };
 
+enum monitor_type {
+    EVENT_MONITOR_UNWIND = 77,
+    EVENT_MONITOR_TRACEBACK,
+    EVENT_MONITOR_FULL,
+};
+
 struct event_status_decl {
     char *name;
     int value;
@@ -37,6 +43,7 @@ typedef struct event_ob {
     struct perf_event_attr attr;
     int fd;
     enum event_status status;
+    enum monitor_type monitor;
 } PyPerfEvent;
 
 extern PyTypeObject event_ob__type;

@@ -40,22 +40,33 @@ class ProfileRunnerPerfSampling(ProfileRunner):
         "cache-references": (sampling.TYPE_HARDWARE, sampling.COUNT_HW_CACHE_REFERENCES),
         "cache-misses":     (sampling.TYPE_HARDWARE, sampling.COUNT_HW_CACHE_MISSES),
     }
-    def __init__(self, event, period):
+    mondefs = {
+        "unwind": sampling.EVENT_MONITOR_UNWIND,
+        "traceback": sampling.EVENT_MONITOR_TRACEBACK,
+        "full": sampling.EVENT_MONITOR_FULL,
+    }
+    def __init__(self, event, period, monitor = "traceback"):
         if not event in self.evdefs.keys():
             raise RuntimeError("unkown event")
+        if not monitor in self.mondefs.keys():
+            raise RuntimeError("unkown monitor")
         self._event = event
         self._period = period
+        self._monitor = monitor
     def enable(self):
         (ev_type, ev_config) = self.evdefs[self._event]
+        mon = self.mondefs[self._monitor]
         enable_perf()
         ev = sampling.Event(type=ev_type,
                             config=ev_config,
                             sample_period=self._period,
                             freq=0)
+        ev.monitor = mon
         sampling.open(ev)
         sampling.enable()
     def disable(self):
         sampling.disable()
+        sampling.close()
         disable_perf()
 
 def run(prof):
