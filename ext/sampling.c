@@ -49,6 +49,7 @@ static int ref = 0;
 
 /* forward definition for handle_signal */
 static void traceback_full(PyFrameObject *frame);
+static size_t __do_traceback(PyFrameObject *frame, struct frame *tsf, int max);
 static inline PyFrameObject *get_top_frame(void);
 
 /*
@@ -62,8 +63,33 @@ PyPerfEvent *xev = NULL;
 static void handle_sigio(int signo, siginfo_t *info, void *data)
 {
     ACCESS_ONCE(hits) = hits + 1;
-    traceback_full(get_top_frame());
     if (xev) {
+        switch (xev->monitor) {
+        case EVENT_MONITOR_UNWIND:
+        {
+            void *addr[DEPTH_MAX];
+            size_t unw_depth = 0;
+
+            unw_depth = unw_backtrace((void **)&addr, DEPTH_MAX);
+            assert(unw_depth <= DEPTH_MAX);
+            tracepoint(python, unwind, addr, unw_depth);
+            break;
+        }
+        case EVENT_MONITOR_TRACEBACK:
+        {
+            struct frame tsf[DEPTH_MAX];
+            size_t depth = 0;
+
+            depth = __do_traceback(get_top_frame(), tsf, DEPTH_MAX);
+            tracepoint(python, traceback, tsf, depth);
+            break;
+        }
+        case EVENT_MONITOR_FULL:
+            traceback_full(get_top_frame());
+            break;
+        default:
+            break;
+        }
         ioctl(xev->fd, PERF_EVENT_IOC_REFRESH, 1);
     }
 }
@@ -350,6 +376,7 @@ int event_ob__init(PyPerfEvent *self, PyObject *args, PyObject *kwargs)
 
     self->attr = attr;
     self->status = EVENT_STATUS_CLOSED;
+    self->monitor = EVENT_MONITOR_TRACEBACK;
     self->fd = -1;
 
     return 0;
@@ -377,6 +404,7 @@ static PyMemberDef event_ob__members[] = {
     { "config", T_LONG, offsetof(PyPerfEvent, attr.config), 0, "event config"},
     { "status", T_INT,  offsetof(PyPerfEvent, status),      0, "event status"},
     { "fd",     T_INT,  offsetof(PyPerfEvent, fd),          0, "event file descriptor"},
+    { "monitor",T_INT,  offsetof(PyPerfEvent, monitor),     0, "monitor type"},
     { NULL }  /* Sentinel */
 };
 
@@ -411,9 +439,12 @@ PyTypeObject event_ob__type = {
  */
 
 struct event_status_decl event_status__constants[] = {
-    { "EVENT_STATUS_OPENED", EVENT_STATUS_OPENED },
-    { "EVENT_STATUS_CLOSED", EVENT_STATUS_CLOSED },
-    { "EVENT_STATUS_FAILED", EVENT_STATUS_FAILED },
+    { "EVENT_STATUS_OPENED",        EVENT_STATUS_OPENED },
+    { "EVENT_STATUS_CLOSED",        EVENT_STATUS_CLOSED },
+    { "EVENT_STATUS_FAILED",        EVENT_STATUS_FAILED },
+    { "EVENT_MONITOR_UNWIND",       EVENT_MONITOR_UNWIND },
+    { "EVENT_MONITOR_TRACEBACK",    EVENT_MONITOR_TRACEBACK },
+    { "EVENT_MONITOR_FULL",         EVENT_MONITOR_FULL },
     { .name = NULL },
 };
 
