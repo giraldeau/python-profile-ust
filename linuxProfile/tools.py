@@ -205,7 +205,7 @@ def profile_rms_error(stats, root):
     root_total = float(root.total)
     stat_total = 0.0
     for stat in stats:
-        stat_total += float(stat.total)
+        stat_total += float(stat.value)
     rms = 0.0
     for stat in stats:
         node = root.query(stat.path)
@@ -214,7 +214,7 @@ def profile_rms_error(stats, root):
             p1 = node.total / root_total
         p2 = stat.total / stat_total
         err = p1 - p2
-        print("{} {} {} {} {}".format(node, stat, p1, p2, err))
+        # print("{} {} {} {} {}".format(node, stat, p1, p2, err))
         rms += err * err
     rms = math.sqrt(rms)
     return rms

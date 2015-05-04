@@ -72,7 +72,11 @@ def test_profile():
     root = ProfileTree("root")
     trace = [["a", "b", "c"], ["a", "c"]]
     # (path, total, self, children)
-    exp = [ ("/root", 2, 0, 2), ("/root/a", 2, 0, 2), ("/root/a/b", 1, 0, 1), ("/root/a/b/c", 1, 1, 0), ("/root/a/c", 1, 1, 0) ]
+    exp = [ ("/root", 2, 0, 2),
+            ("/root/a", 2, 0, 2),
+            ("/root/a/b", 1, 0, 1),
+            ("/root/a/b/c", 1, 1, 0),
+            ("/root/a/c", 1, 1, 0) ]
     for ev in trace:
         leaf = root.get_or_create_branch(ev)
         leaf.value += 1
