@@ -130,10 +130,9 @@ class ProfileTree(object):
         if len(items) == 1:
             return node
         for item in items[1:]:
-            temp = node.get_child(item)
-            if temp == None:
+            node = node.get_child(item)
+            if node == None:
                 break
-            node = temp
         return node
 
     def __repr__(self):
@@ -206,14 +205,16 @@ def profile_rms_error(stats, root):
     root_total = float(root.total)
     stat_total = 0.0
     for stat in stats:
-        stat_total += float(stat.value)
+        stat_total += float(stat.total)
     rms = 0.0
     for stat in stats:
         node = root.query(stat.path)
-        assert(node != None)
-        p1 = node.value / root_total
-        p2 = stat.value / stat_total
+        p1 = 0.0
+        if node != None:
+            p1 = node.total / root_total
+        p2 = stat.total / stat_total
         err = p1 - p2
+        print("{} {} {} {} {}".format(node, stat, p1, p2, err))
         rms += err * err
     rms = math.sqrt(rms)
     return rms
