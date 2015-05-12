@@ -2,7 +2,7 @@ import argparse
 import sys
 import os
 
-from linuxProfile.api import enable_perf, disable_perf, enable_ust, disable_ust, sampling
+from linuxProfile.api import enable_ust, disable_ust, sampling
 
 '''
 Launcher for LTTng-UST
@@ -27,12 +27,6 @@ class ProfileRunnerUST(ProfileRunner):
     def disable(self):
         disable_ust()
 
-class ProfileRunnerPerf(ProfileRunner):
-    def enable(self):
-        enable_perf()
-    def disable(self):
-        disable_perf()
-
 class ProfileRunnerPerfSampling(ProfileRunner):
     evdefs = {
         "cycles":           (sampling.TYPE_HARDWARE, sampling.COUNT_HW_CPU_CYCLES),
@@ -45,7 +39,7 @@ class ProfileRunnerPerfSampling(ProfileRunner):
         "traceback": sampling.EVENT_MONITOR_TRACEBACK,
         "full": sampling.EVENT_MONITOR_FULL,
     }
-    def __init__(self, event, period, monitor = "traceback"):
+    def __init__(self, event, period, monitor="traceback"):
         if not event in self.evdefs.keys():
             raise RuntimeError("unkown event")
         if not monitor in self.mondefs.keys():
@@ -56,7 +50,6 @@ class ProfileRunnerPerfSampling(ProfileRunner):
     def enable(self):
         (ev_type, ev_config) = self.evdefs[self._event]
         mon = self.mondefs[self._monitor]
-        enable_perf()
         ev = sampling.Event(type=ev_type,
                             config=ev_config,
                             sample_period=self._period,
@@ -67,7 +60,6 @@ class ProfileRunnerPerfSampling(ProfileRunner):
     def disable(self):
         sampling.disable()
         sampling.close()
-        disable_perf()
 
 def run(prof):
     parser = argparse.ArgumentParser()

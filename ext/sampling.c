@@ -34,22 +34,8 @@
 
 #define DEPTH_MAX 100
 
-/*
- * We don't use TLS here, seems to possible to access a thread data from
- * another thread, nor with pthread_getspecific().
- *
- * Instead, we use a counter for the number of enable/disable. If the gen
- * variable is lower than the current ref variable, then the frame may not be
- * valid.
- */
-
-static PyFrameObject *top;
-static int gen;
-static int ref = 0;
-
 /* forward definition for handle_signal */
 static void record_traceback(PyThreadState *tstate, enum monitor_type monitor);
-static inline PyFrameObject *get_top_frame(void);
 
 /*
  * Signal handler
@@ -67,82 +53,6 @@ static void handle_sigio(int signo, siginfo_t *info, void *data)
         record_traceback(tstate, xev->monitor);
         ioctl(xev->fd, PERF_EVENT_IOC_REFRESH, 1);
     }
-}
-
-/*
- * Function callback for signal safety:
- *  - encode ahead the unicode strings to UTF-8
- *  - keep a pointer to the top-frame
- */
-
-static inline void
-set_top_frame(PyFrameObject *frame)
-{
-    /* make sure the top frame is assigned before the generation is set */
-    top = frame;
-    __sync_synchronize();
-    if (gen != ref) {
-        gen = ref;
-    }
-}
-
-static inline PyFrameObject *
-get_top_frame(void)
-{
-    return (gen == ref) ? top : NULL;
-}
-
-static int
-function_handler(PyObject *obj, PyFrameObject *frame, int what, PyObject *arg)
-{
-    if (what == PyTrace_CALL) {
-        get_utf8(frame->f_code->co_name);
-        get_utf8(frame->f_code->co_filename);
-        set_top_frame(frame);
-    } else if (what == PyTrace_RETURN) {
-        set_top_frame(frame->f_back); // does the frame is the about-to-return one?
-    }
-    return 0;
-}
-
-static void
-warm_frames(void)
-{
-    PyThreadState *tstate;
-    PyFrameObject *frame;
-
-    /* warm the current interpreter */
-    tstate = PyThreadState_Get();
-    while (tstate != NULL) {
-        frame = _PyThreadState_GetFrame(tstate);
-        while (frame != NULL) {
-            get_utf8(frame->f_code->co_name);
-            get_utf8(frame->f_code->co_filename);
-            frame = frame->f_back;
-        }
-        tstate = PyThreadState_Next(tstate);
-    }
-}
-
-/* FIXME: report error */
-PyObject*
-enable_perf(PyObject* self, PyObject* args)
-{
-    (void) self, (void) args;
-
-    ref += 1;
-    PyEval_SetProfile(function_handler, NULL);
-    warm_frames();
-    Py_RETURN_NONE;
-}
-
-PyObject*
-disable_perf(PyObject* self, PyObject* args)
-{
-    (void) self, (void) args;
-
-    PyEval_SetProfile(NULL, NULL);
-    Py_RETURN_NONE;
 }
 
 static inline void

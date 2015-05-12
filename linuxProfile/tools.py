@@ -146,8 +146,7 @@ class PythonTracebackEventHandler(object):
         self.count = 0
 
     def handle(self, event):
-        if (event.name != "python:traceback" and
-            event.name != "python:traceback_full"):
+        if (event.name != "python:traceback"):
             return
         frames = event.get("frames", [])
         frames.reverse()
@@ -201,6 +200,8 @@ def make_path_stats(gen):
         res.append(item)
     return res
 
+# FIXME: will return 0 if there is no intersection between profile
+# it should return instead the maximum error
 def profile_rms_error(stats, root):
     root_total = float(root.total)
     stat_total = 0.0
@@ -210,9 +211,11 @@ def profile_rms_error(stats, root):
     for stat in stats:
         node = root.query(stat.path)
         p1 = 0.0
-        if node != None:
+        if node != None and root_total > 0.0:
             p1 = node.total / root_total
-        p2 = stat.total / stat_total
+        p2 = 0.0
+        if stat_total > 0.0:
+            p2 = stat.total / stat_total
         err = p1 - p2
         # print("{} {} {} {} {}".format(node, stat, p1, p2, err))
         rms += err * err

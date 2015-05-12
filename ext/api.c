@@ -15,8 +15,6 @@
 
 static PyMethodDef PythonProfileLttngMethods[] =
 {
-    {"enable_perf",         enable_perf,        METH_NOARGS,  NULL},
-    {"disable_perf",        disable_perf,       METH_NOARGS,  NULL},
     {"enable_ust",          enable_ust,         METH_NOARGS,  NULL},
     {"disable_ust",         disable_ust,        METH_NOARGS,  NULL},
     {"set_callback",        set_callback,       METH_VARARGS, NULL},

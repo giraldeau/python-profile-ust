@@ -49,8 +49,6 @@ typedef struct event_ob {
 extern PyTypeObject event_ob__type;
 extern PyModuleDef sampling__moduledef;
 
-extern PyObject* enable_perf(PyObject* self, PyObject* args);
-extern PyObject* disable_perf(PyObject* self, PyObject* args);
 extern PyObject* do_traceback(PyObject* self, PyObject *args);
 extern PyObject* do_unwind(PyObject* self, PyObject *args);
 extern PyObject* do_traceback_full(PyObject* self, PyObject *args);
