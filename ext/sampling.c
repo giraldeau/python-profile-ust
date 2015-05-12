@@ -48,8 +48,7 @@ static int gen;
 static int ref = 0;
 
 /* forward definition for handle_signal */
-static void traceback_full(PyFrameObject *frame);
-static size_t __do_traceback(PyFrameObject *frame, struct frame *tsf, int max);
+static void record_traceback(PyThreadState *tstate, enum monitor_type monitor);
 static inline PyFrameObject *get_top_frame(void);
 
 /*
@@ -62,34 +61,10 @@ PyPerfEvent *xev = NULL;
 
 static void handle_sigio(int signo, siginfo_t *info, void *data)
 {
-    ACCESS_ONCE(hits) = hits + 1;
+    hits++;
     if (xev) {
-        switch (xev->monitor) {
-        case EVENT_MONITOR_UNWIND:
-        {
-            void *addr[DEPTH_MAX];
-            size_t unw_depth = 0;
-
-            unw_depth = unw_backtrace((void **)&addr, DEPTH_MAX);
-            assert(unw_depth <= DEPTH_MAX);
-            tracepoint(python, unwind, addr, unw_depth);
-            break;
-        }
-        case EVENT_MONITOR_TRACEBACK:
-        {
-            struct frame tsf[DEPTH_MAX];
-            size_t depth = 0;
-
-            depth = __do_traceback(get_top_frame(), tsf, DEPTH_MAX);
-            tracepoint(python, traceback, tsf, depth);
-            break;
-        }
-        case EVENT_MONITOR_FULL:
-            traceback_full(get_top_frame());
-            break;
-        default:
-            break;
-        }
+        PyThreadState *tstate = PyThreadState_GET();
+        record_traceback(tstate, xev->monitor);
         ioctl(xev->fd, PERF_EVENT_IOC_REFRESH, 1);
     }
 }
@@ -177,7 +152,7 @@ populate_utf8(PyObject *unicode, char **str, size_t *len)
     *len = PyUnicode_UTF8_LENGTH(unicode);
 }
 
-static size_t __do_traceback(PyFrameObject *frame, struct frame *tsf, int max)
+static size_t __interpreter_traceback(PyFrameObject *frame, struct frame *tsf, int max)
 {
     size_t depth = 0;
     while (frame != NULL && depth < max) {
@@ -199,47 +174,48 @@ static size_t __do_traceback(PyFrameObject *frame, struct frame *tsf, int max)
     return depth;
 }
 
-static void traceback_full(PyFrameObject *frame)
+static void
+record_traceback(PyThreadState *tstate, enum monitor_type monitor)
 {
     void *addr[DEPTH_MAX];
     struct frame tsf[DEPTH_MAX];
     size_t unw_depth = 0;
     size_t depth = 0;
 
-    depth = __do_traceback(frame, tsf, DEPTH_MAX);
-    assert(depth <= DEPTH_MAX);
-    unw_depth = unw_backtrace(addr, DEPTH_MAX);
-    assert(unw_depth <= DEPTH_MAX);
-    tracepoint(python, traceback_full, addr, unw_depth, tsf, depth);
+    if (monitor == EVENT_MONITOR_FULL || monitor == EVENT_MONITOR_UNWIND) {
+        unw_depth = unw_backtrace((void **)&addr, DEPTH_MAX);
+        assert(unw_depth <= DEPTH_MAX);
+    }
+    if (monitor == EVENT_MONITOR_FULL || monitor == EVENT_MONITOR_TRACEBACK) {
+        if (tstate != NULL) {
+            depth = __interpreter_traceback(tstate->frame, tsf, DEPTH_MAX);
+            assert(depth <= DEPTH_MAX);
+        }
+    }
+    tracepoint(python, traceback, addr, unw_depth, tsf, depth);
 }
 
 PyObject *
 do_traceback(PyObject* self, PyObject* args)
 {
-    struct frame tsf[DEPTH_MAX];
-    size_t depth = 0;
-
-    depth = __do_traceback(PyEval_GetFrame(), tsf, DEPTH_MAX);
-    tracepoint(python, traceback, tsf, depth);
+    PyThreadState *tstate = PyThreadState_GET();
+    record_traceback(tstate, EVENT_MONITOR_TRACEBACK);
     Py_RETURN_NONE;
 }
 
 PyObject *
 do_unwind(PyObject* self, PyObject* args)
 {
-    void *addr[DEPTH_MAX];
-    size_t unw_depth = 0;
-
-    unw_depth = unw_backtrace((void **)&addr, DEPTH_MAX);
-    assert(unw_depth <= DEPTH_MAX);
-    tracepoint(python, unwind, addr, unw_depth);
+    PyThreadState *tstate = PyThreadState_GET();
+    record_traceback(tstate, EVENT_MONITOR_UNWIND);
     Py_RETURN_NONE;
 }
 
 PyObject *
 do_traceback_full(PyObject* self, PyObject* args)
 {
-    traceback_full(PyEval_GetFrame());
+    PyThreadState *tstate = PyThreadState_GET();
+    record_traceback(tstate, EVENT_MONITOR_FULL);
     Py_RETURN_NONE;
 }
 
