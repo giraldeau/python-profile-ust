@@ -13,7 +13,7 @@ Available events:
 
 Install dependencies and build:
 ```
-sudo apt-get install lttng-tools liblttng-ust-dev python3-dev python-nose3
+sudo apt-get install lttng-tools liblttng-ust-dev python3-dev python3-nose
 python3 setup.py build
 sudo python3 setup.py install
 ```
